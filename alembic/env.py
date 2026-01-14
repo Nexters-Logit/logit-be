@@ -14,7 +14,11 @@ from src.config import settings
 config = context.config
 
 # Set the SQLAlchemy URL from settings
-config.set_main_option("sqlalchemy.url", str(settings.SQLALCHEMY_DATABASE_URI))
+# Replace asyncpg with psycopg2 for sync migrations
+sync_database_url = str(settings.SQLALCHEMY_DATABASE_URI).replace(
+    "postgresql+asyncpg", "postgresql+psycopg2"
+)
+config.set_main_option("sqlalchemy.url", sync_database_url)
 
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:
