@@ -1,22 +1,24 @@
-from sqlmodel import Session, create_engine, select
+from collections.abc import AsyncGenerator
+
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
 
 from src.config import settings
 
-# Create database engine
-engine = create_engine(str(settings.SQLALCHEMY_DATABASE_URI), echo=True)
+# Create async database engine
+async_engine = create_async_engine(
+    str(settings.SQLALCHEMY_DATABASE_URI),
+    echo=True,
+    future=True,
+)
 
 
-def init_db(session: Session) -> None:
+async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
     """
-    Initialize database with initial data.
-    Tables should be created with Alembic migrations.
+    Async database session dependency.
     """
-    # Import all models here to ensure they are registered
-    from app import models  # noqa: F401
-
-    # Create tables (use Alembic migrations in production)
-    # from sqlmodel import SQLModel
-    # SQLModel.metadata.create_all(engine)
-
-    # Create initial data if needed
-    pass
+    async_session = sessionmaker(
+        async_engine, class_=AsyncSession, expire_on_commit=False
+    )
+    async with async_session() as session:
+        yield session

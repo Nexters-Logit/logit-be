@@ -16,7 +16,6 @@ dependencies = [
     "sqlmodel>=0.0.21",
     "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30.0",
-    "psycopg2-binary>=2.9.9",  # Sync driver for Alembic migrations
     "alembic>=1.14.0",
 
     # Database - Redis

@@ -32,6 +32,19 @@ def create_refresh_token(subject: str | Any) -> str:
     return encoded_jwt
 
 
+def create_onboarding_token(subject: str | Any) -> str:
+    """
+    Create onboarding token for new users.
+
+    This token is used only for completing the signup process.
+    Expires in 15 minutes.
+    """
+    expire = datetime.now(timezone.utc) + timedelta(minutes=15)
+    to_encode = {"exp": expire, "sub": str(subject), "type": "onboarding"}
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return encoded_jwt
+
+
 def verify_token(token: str, token_type: str = "access") -> str | None:
     """
     Verify JWT token and return subject (user_id)
