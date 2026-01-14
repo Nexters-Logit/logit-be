@@ -1,13 +1,14 @@
-"""Authentication router - OAuth and JWT endpoints."""
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import RedirectResponse
 
 from src.auth import constants, schemas, service
 from src.config import settings
-from src.security import create_access_token, verify_token
+from src.security import create_access_token, create_refresh_token, verify_token
 from src.users import service as user_service
 from src.users.dependencies import SessionDep
+from src.users.models import Gender
 
 router = APIRouter()
 
@@ -35,11 +36,15 @@ async def google_login():
     return RedirectResponse(url=google_auth_url)
 
 
-@router.get("/google/callback", response_model=schemas.Token)
+@router.get("/google/callback", response_model=schemas.OAuthCallbackResponse)
 async def google_callback(code: str, session: SessionDep):
     """
     Handle Google OAuth callback.
-    Exchange authorization code for access token and create/login user.
+
+    Returns different responses based on user status:
+    - New user: onboarding_token (requires additional info)
+    - Existing user (onboarding incomplete): onboarding_token
+    - Existing user (onboarding complete): access_token + refresh_token
     """
     if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
         raise HTTPException(
@@ -54,43 +59,6 @@ async def google_callback(code: str, session: SessionDep):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
-
-
-@router.get("/apple")
-async def apple_login():
-    """
-    Redirect to Apple OAuth login page.
-    Initiates the OAuth flow with Apple.
-    """
-    if not settings.APPLE_CLIENT_ID:
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="Apple OAuth not configured",
-        )
-
-    apple_auth_url = (
-        f"{constants.APPLE_AUTH_URL}?"
-        f"client_id={settings.APPLE_CLIENT_ID}&"
-        f"redirect_uri={settings.APPLE_REDIRECT_URI}&"
-        f"response_type=code&"
-        f"response_mode=form_post&"
-        f"scope={constants.APPLE_SCOPES}"
-    )
-
-    return RedirectResponse(url=apple_auth_url)
-
-
-@router.post("/apple/callback")
-async def apple_callback(code: str, session: SessionDep):
-    """
-    Handle Apple OAuth callback.
-    Note: Apple uses POST for callback (response_mode=form_post).
-    """
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Apple OAuth callback not fully implemented yet",
-    )
-
 
 @router.post("/refresh")
 async def refresh_access_token(
@@ -110,7 +78,7 @@ async def refresh_access_token(
         )
 
     # Get user
-    user = user_service.get_user_by_id(session=session, user_id=int(user_id))
+    user = await user_service.get_user_by_id(session=session, user_id=int(user_id))
 
     if not user:
         raise HTTPException(
@@ -152,9 +120,98 @@ async def logout(request: schemas.LogoutRequest, session: SessionDep):
         )
 
     # Get user and clear refresh token
-    user = user_service.get_user_by_id(session=session, user_id=int(user_id))
+    user = await user_service.get_user_by_id(session=session, user_id=int(user_id))
 
     if user:
-        user_service.update_refresh_token(session=session, db_user=user, refresh_token="")
+        await user_service.update_refresh_token(session=session, db_user=user, refresh_token="")
 
     return {"message": "Successfully logged out"}
+
+
+@router.post("/complete-signup", response_model=schemas.CompleteSignupResponse)
+async def complete_signup(request: schemas.CompleteSignupRequest, session: SessionDep):
+    """
+    Complete user signup with additional information.
+
+    New users must provide:
+    - age
+    - gender
+    - terms agreement
+
+    Returns full JWT tokens upon successful completion.
+    """
+    # Verify onboarding token
+    user_id = verify_token(request.onboarding_token, token_type="onboarding")
+
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired onboarding token",
+        )
+
+    # Get user
+    user = await user_service.get_user_by_id(session=session, user_id=int(user_id))
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    # Check if already completed
+    if user.onboarding_completed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Onboarding already completed",
+        )
+
+    # Validate terms agreement
+    if not request.terms_agreed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Terms agreement is required",
+        )
+
+    # Validate gender
+    try:
+        gender_enum = Gender(request.gender)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid gender value. Must be one of: {', '.join([g.value for g in Gender])}",
+        )
+
+    # Update user with onboarding info
+    user.age = request.age
+    user.gender = gender_enum
+    user.terms_agreed = True
+    user.terms_agreed_at = datetime.now(timezone.utc)
+    user.onboarding_completed = True
+    user.is_active = True  # Activate user
+    user.updated_at = datetime.now(timezone.utc)
+
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+
+    # Generate full JWT tokens
+    access_token = create_access_token(subject=str(user.id))
+    refresh_token_jwt = create_refresh_token(subject=str(user.id))
+
+    # Store refresh token
+    await user_service.update_refresh_token(
+        session=session, db_user=user, refresh_token=refresh_token_jwt
+    )
+
+    return schemas.CompleteSignupResponse(
+        access_token=access_token,
+        refresh_token=refresh_token_jwt,
+        user={
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "age": user.age,
+            "gender": user.gender.value if user.gender else None,
+            "profile_image_url": user.profile_image_url,
+        },
+    )

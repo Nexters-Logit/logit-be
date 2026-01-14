@@ -35,7 +35,7 @@ async def update_current_user(
     """
     Update current user's information.
     """
-    user = service.update_user(session=session, db_user=current_user, user_in=user_in)
+    user = await service.update_user(session=session, db_user=current_user, user_in=user_in)
     return user
 
 
@@ -47,7 +47,7 @@ async def delete_current_user(
     """
     Delete current user's account.
     """
-    service.delete_user(session=session, user_id=current_user.id)
+    await service.delete_user(session=session, user_id=current_user.id)
     return {"message": "User successfully deleted"}
 
 
@@ -61,7 +61,7 @@ async def get_user_by_id(
     Get user by ID.
     Requires authentication.
     """
-    user = service.get_user_by_id(session=session, user_id=user_id)
+    user = await service.get_user_by_id(session=session, user_id=user_id)
 
     if not user:
         raise HTTPException(

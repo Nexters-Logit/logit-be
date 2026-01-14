@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.auth import router as auth_router
 from src.config import settings
+from src.projects import router as projects_router
 from src.users import router as users_router
 
 # Initialize FastAPI app
@@ -40,6 +41,11 @@ app.include_router(
     users_router.router,
     prefix=f"{settings.API_V1_STR}/users",
     tags=["Users"],
+)
+app.include_router(
+    projects_router.router,
+    prefix=f"{settings.API_V1_STR}/projects",
+    tags=["Projects"],
 )
 
 

@@ -13,6 +13,15 @@ class OAuthProvider(str, Enum):
     APPLE = "apple"
 
 
+class Gender(str, Enum):
+    """Gender types."""
+
+    MALE = "male"
+    FEMALE = "female"
+    OTHER = "other"
+    PREFER_NOT_TO_SAY = "prefer_not_to_say"
+
+
 class User(SQLModel, table=True):
     """User database model."""
 
@@ -28,6 +37,13 @@ class User(SQLModel, table=True):
     oauth_provider: OAuthProvider | None = Field(default=None)
     oauth_provider_id: str | None = Field(default=None, index=True)
     profile_image_url: str | None = Field(default=None)
+
+    # Onboarding fields
+    age: int | None = Field(default=None)
+    gender: Gender | None = Field(default=None)
+    terms_agreed: bool = Field(default=False)
+    terms_agreed_at: datetime | None = Field(default=None)
+    onboarding_completed: bool = Field(default=False)
 
     # Refresh token for JWT
     refresh_token: str | None = Field(default=None)
