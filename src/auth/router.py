@@ -4,7 +4,8 @@ from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import RedirectResponse
 
 from src.auth import constants, schemas, service
-from src.core import create_access_token, settings, verify_token
+from src.config import settings
+from src.security import create_access_token, verify_token
 from src.users import service as user_service
 from src.users.dependencies import SessionDep
 

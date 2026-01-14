@@ -5,7 +5,8 @@ from sqlmodel import Session
 
 from src.auth import constants
 from src.auth.schemas import OAuthUserCreate, Token
-from src.core import create_access_token, create_refresh_token, settings
+from src.config import settings
+from src.security import create_access_token, create_refresh_token
 from src.users import service as user_service
 from src.users.models import OAuthProvider, User
 

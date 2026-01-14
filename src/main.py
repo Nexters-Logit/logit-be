@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.auth import router as auth_router
-from src.core import settings
+from src.config import settings
 from src.users import router as users_router
 
 # Initialize FastAPI app

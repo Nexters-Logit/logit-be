@@ -7,7 +7,9 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session
 
-from src.core import engine, settings, verify_token
+from src.config import settings
+from src.database import engine
+from src.security import verify_token
 from src.users import service
 from src.users.models import User
 
