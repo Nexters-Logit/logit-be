@@ -31,9 +31,7 @@ dependencies = [
     "langchain-openai>=0.2.14",
     "langchain-qdrant>=0.2.0",
 
-    # Security
-    "passlib[bcrypt]>=1.7.4",
-    "bcrypt==4.3.0",
+    # Security (JWT for OAuth authentication)
     "pyjwt>=2.8.0",
 
     # Utilities
@@ -50,7 +48,6 @@ dev = [
     "pytest-cov>=6.0.0",
     "mypy>=1.8.0",
     "ruff>=0.2.2",
-    "types-passlib>=1.7.7",
 ]
 
 [build-system]

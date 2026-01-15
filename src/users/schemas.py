@@ -1,6 +1,7 @@
 """User schemas."""
 
 from datetime import datetime
+from uuid import UUID
 
 from sqlmodel import SQLModel
 
@@ -15,9 +16,8 @@ class UserBase(SQLModel):
 
 
 class UserCreate(UserBase):
-    """Schema for creating a user."""
+    """Schema for creating a user (OAuth only)."""
 
-    password: str | None = None
     is_active: bool = True
 
 
@@ -26,13 +26,12 @@ class UserUpdate(SQLModel):
 
     email: str | None = None
     full_name: str | None = None
-    password: str | None = None
 
 
 class UserPublic(UserBase):
     """Schema for user public data."""
 
-    id: int
+    id: UUID
     oauth_provider: OAuthProvider | None = None
     profile_image_url: str | None = None
     created_at: datetime
