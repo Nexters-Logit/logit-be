@@ -36,10 +36,21 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
-    # Security
+    # Security - JWT Token Settings
     SECRET_KEY: str  # Must be set in .env!
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 30  # 30 days
+
+    # Access token: short-lived
+    # - Web: 15-30 minutes (requires frequent refresh)
+    # - Mobile: 1-24 hours (better UX, acceptable for mobile apps)
+    # Can be overridden in .env: ACCESS_TOKEN_EXPIRE_MINUTES=60
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30  # 30 minutes default
+
+    # Refresh token: long-lived but rotated on each use
+    # - OAuth 2.0 BCP recommends rotation for security
+    # - Longer expiry is safer with rotation (prevents session loss)
+    # Can be overridden in .env: REFRESH_TOKEN_EXPIRE_DAYS=60
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30  # 30 days default
+
     ALGORITHM: str = "HS256"
 
     # CORS

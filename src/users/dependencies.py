@@ -1,6 +1,7 @@
 """User dependencies for dependency injection."""
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -42,7 +43,7 @@ async def get_current_user(
         )
 
     # Get user from database
-    user = await service.get_user_by_id(session=session, user_id=int(user_id))
+    user = await service.get_user_by_id(session=session, user_id=UUID(user_id))
 
     if not user:
         raise HTTPException(
