@@ -15,6 +15,10 @@ class ProjectUpdate(BaseModel):
     description: Optional[str] = None
     is_active: Optional[bool] = None
 
+class TestResponse(BaseModel):
+    message: str
+    status: str
+    data: list[str]
 
 class ProjectRead(ProjectBase):
     id: int

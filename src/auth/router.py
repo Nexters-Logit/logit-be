@@ -4,6 +4,12 @@ from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import RedirectResponse
 
 from src.auth import constants, schemas, service
+from src.common.responses import (
+    ERROR_400_BAD_REQUEST,
+    ERROR_401_UNAUTHORIZED,
+    ERROR_404_NOT_FOUND,
+    ERROR_501_NOT_IMPLEMENTED,
+)
 from src.config import settings
 from src.security import create_access_token, create_refresh_token, verify_token
 from src.users import service as user_service
@@ -12,12 +18,9 @@ from src.users.dependencies import SessionDep
 router = APIRouter()
 
 
-@router.get("/google")
+@router.get("/google", responses={501: ERROR_501_NOT_IMPLEMENTED})
 async def google_login():
-    """
-    Redirect to Google OAuth login page.
-    Initiates the OAuth flow with Google.
-    """
+    """Redirect to Google OAuth login page."""
     if not settings.GOOGLE_CLIENT_ID:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
@@ -35,15 +38,13 @@ async def google_login():
     return RedirectResponse(url=google_auth_url)
 
 
-@router.get("/google/callback", response_model=schemas.OAuthCallbackResponse)
+@router.get(
+    "/google/callback",
+    response_model=schemas.OAuthCallbackResponse,
+    responses={400: ERROR_400_BAD_REQUEST, 501: ERROR_501_NOT_IMPLEMENTED},
+)
 async def google_callback(code: str, session: SessionDep):
-    """
-    Handle Google OAuth callback.
-
-    Returns JWT tokens (access_token + refresh_token) for both new and existing users.
-    - New users are created with terms automatically accepted
-    - Existing users receive fresh tokens
-    """
+    """Handle Google OAuth callback. Returns JWT tokens for all users."""
     if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
@@ -58,18 +59,13 @@ async def google_callback(code: str, session: SessionDep):
             detail=str(e),
         )
 
-@router.post("/refresh", response_model=schemas.Token)
-async def refresh_access_token(
-    request: schemas.RefreshTokenRequest, session: SessionDep
-):
-    """
-    Refresh tokens using refresh token (Refresh Token Rotation).
-
-    Security: OAuth 2.0 BCP - implements refresh token rotation
-    - Returns new access token AND new refresh token
-    - Invalidates old refresh token immediately
-    - Prevents refresh token reuse attacks
-    """
+@router.post(
+    "/refresh",
+    response_model=schemas.Token,
+    responses={400: ERROR_400_BAD_REQUEST, 401: ERROR_401_UNAUTHORIZED, 404: ERROR_404_NOT_FOUND},
+)
+async def refresh_access_token(request: schemas.RefreshTokenRequest, session: SessionDep):
+    """Refresh tokens using refresh token (Refresh Token Rotation)."""
     # Verify refresh token (checks expiration automatically)
     user_id = verify_token(request.refresh_token, token_type="refresh")
 
@@ -116,11 +112,9 @@ async def refresh_access_token(
     )
 
 
-@router.post("/logout")
+@router.post("/logout", responses={401: ERROR_401_UNAUTHORIZED})
 async def logout(request: schemas.LogoutRequest, session: SessionDep):
-    """
-    Logout user by invalidating refresh token.
-    """
+    """Logout user by invalidating refresh token."""
     # Verify refresh token
     user_id = verify_token(request.refresh_token, token_type="refresh")
 

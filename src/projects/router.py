@@ -5,10 +5,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_async_db
 from src.projects import service
-from src.projects.schemas import ProjectCreate, ProjectRead, ProjectUpdate
+from src.projects.schemas import ProjectCreate, ProjectRead, ProjectUpdate, TestResponse
 
 router = APIRouter()
 
+@router.get("/test", response_model=TestResponse, status_code=status.HTTP_200_OK)
+async def test():
+    try:
+        return TestResponse(message="Hello, World!", status="success", data=["test1", "test2"])
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @router.post("/", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
 async def create_project(
