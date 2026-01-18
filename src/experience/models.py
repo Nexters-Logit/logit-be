@@ -1,6 +1,7 @@
 """Experience domain models for Qdrant storage."""
 
-from datetime import date, datetime
+import datetime as dt
+from datetime import datetime
 from enum import Enum
 from uuid import uuid4
 
@@ -41,7 +42,7 @@ class ExperienceBase(BaseModel):
     """Base model for Experience with STAR format fields."""
 
     title: str = Field(..., min_length=1, max_length=200, description="경험 제목")
-    date: date = Field(..., description="경험 발생 날짜 (YYYY-MM-DD)")
+    date: dt.date = Field(..., description="경험 발생 날짜 (YYYY-MM-DD)")
     experience_type: ExperienceType = Field(..., description="경험 타입")
     situation: str = Field(..., min_length=1, description="상황 (STAR의 S)")
     task: str = Field(..., min_length=1, description="과제 (STAR의 T)")
