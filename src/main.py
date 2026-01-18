@@ -67,9 +67,14 @@ app.include_router(
     tags=["Projects"],
 )
 app.include_router(
-    chat_message_router.router,
+    experience_router.router,
     prefix=f"{settings.API_V1_STR}/experiences",
     tags=["Experiences"],
+)
+app.include_router(
+    chat_message_router.router,
+    prefix=f"{settings.API_V1_STR}/chats",
+    tags=["ChatMessages"],
 )
 
 

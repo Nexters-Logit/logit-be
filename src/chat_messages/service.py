@@ -10,7 +10,7 @@ async def create_user_message(
     db: AsyncSession,
     chat_id: UUID,
     content: str,
-    experience_ids: List[int] | None = None
+    experience_ids: List[str] | None = None
 ) -> ChatMessage:
     """사용자 메시지 생성"""
     
@@ -32,7 +32,7 @@ async def create_assistant_message(
     chat_id: UUID,
     content: str,
     assistant_content: str,
-    experience_ids: List[int] | None = None
+    experience_ids: List[str] | None = None
 ) -> ChatMessage:
 
     # 초안 생성 의도 감지
@@ -41,7 +41,7 @@ async def create_assistant_message(
     ai_msg = ChatMessage(
         chat_id=chat_id,
         role=ChatRole.ASSISTANT,
-        content=content,
+        content=content,    
         experience_ids=experience_ids,
         is_draft=is_draft 
     )

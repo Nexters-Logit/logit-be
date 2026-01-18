@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import ARRAY, Column, DateTime, Integer
+from sqlalchemy import ARRAY, Column, DateTime, String
 from sqlmodel import Field, SQLModel
 
 
@@ -29,9 +29,9 @@ class ChatMessage(SQLModel, table=True):
     # Fields
     role: ChatRole = Field(index=True)
     content: str
-    experience_ids: list[int] | None = Field(
+    experience_ids: list[str] | None = Field(
         default=None,
-        sa_column=Column(ARRAY(Integer)),
+        sa_column=Column(ARRAY(String)),    
         description="선택한 경험 ID 배열 (Qdrant에 저장된 경험, 최대 3개)"
     )
     is_draft: bool = Field(
