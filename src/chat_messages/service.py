@@ -1,12 +1,13 @@
-from sqlmodel import Session, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 from uuid import UUID
 from typing import List
 
 from .models import ChatMessage, ChatRole
 from src.chats.models import Chat
 
-def create_user_message(
-    db: Session,
+async def create_user_message(
+    db: AsyncSession,
     chat_id: UUID,
     content: str,
     experience_ids: List[int]
@@ -21,13 +22,13 @@ def create_user_message(
     )
     
     db.add(user_msg)
-    db.commit()
-    db.refresh(user_msg)
+    await db.commit()
+    await db.refresh(user_msg)
     
     return user_msg
 
-def create_assistant_message(
-    db: Session,
+async def create_assistant_message(
+    db: AsyncSession,
     chat_id: UUID,
     content: str,
     experience_ids: List[int],
@@ -46,17 +47,18 @@ def create_assistant_message(
     )
     
     db.add(ai_msg)
-    db.commit()
-    db.refresh(ai_msg)
+    await db.commit()
+    await db.refresh(ai_msg)
     
     return ai_msg
 
 
-def get_chat_by_id(db: Session, chat_id: UUID) -> Chat | None:
+async def get_chat_by_id(db: AsyncSession, chat_id: UUID) -> Chat | None:
     """Chat 조회"""
     
     statement = select(Chat).where(Chat.id == chat_id)
-    return db.exec(statement).first()
+    result = await db.exec(statement)
+    return result.first()
 
 # todo: 이후 고도화
 def detect_draft_intent(content: str) -> bool:
