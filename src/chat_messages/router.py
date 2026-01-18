@@ -19,11 +19,9 @@ async def send_message(
 ):
     """메시지 전송 API
     
-    경험을 선택한 상태에서만 대화 가능
-    
     Args:
         data: MessageRequest (chat_id, experience_ids, content)
-        db: Database session
+        db: Database AsyncSession
     
     Returns:
         MessageResponse (chat_message_id, is_draft)

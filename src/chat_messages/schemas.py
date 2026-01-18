@@ -9,16 +9,19 @@ class MessageRequest(BaseModel):
     """
     
     chat_id: UUID
-    experience_ids: List[int]
+    experience_ids: List[int] | None = None
     content: str
     
     @field_validator("experience_ids")
     @classmethod
     def validate_experience_ids(cls, v: List[int]) -> List[int]:
-        """경험 ID 검증 (1~3개 필수)"""
+        """경험 ID 검증"""
+        
+        if v is None:
+            return None
         
         if len(v) == 0:
-            raise ValueError("최소 1개의 경험을 선택해야 합니다")  # ← 추가!
+            return []
         
         if len(v) > 3:
             raise ValueError("최대 3개의 경험만 선택할 수 있습니다")

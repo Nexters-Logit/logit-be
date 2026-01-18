@@ -10,7 +10,7 @@ async def create_user_message(
     db: AsyncSession,
     chat_id: UUID,
     content: str,
-    experience_ids: List[int]
+    experience_ids: List[int] | None = None
 ) -> ChatMessage:
     """사용자 메시지 생성"""
     
@@ -31,8 +31,8 @@ async def create_assistant_message(
     db: AsyncSession,
     chat_id: UUID,
     content: str,
-    experience_ids: List[int],
-    assistant_content: str  
+    assistant_content: str,
+    experience_ids: List[int] | None = None
 ) -> ChatMessage:
 
     # 초안 생성 의도 감지
