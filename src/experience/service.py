@@ -52,13 +52,91 @@ def _combine_text_for_embedding(experience: Experience) -> str:
     )
 
 
+def _generate_tags(experience: Experience) -> str:
+    """
+    Generate relevant tags using AI based on experience content.
+
+    Args:
+        experience: Experience object
+
+    Returns:
+        Comma-separated string of 1-3 tags
+
+    Raises:
+        HTTPException: If tag generation fails
+    """
+    available_tags = [
+        "고객 이해력",
+        "전문성",
+        "소통력",
+        "실행력",
+        "분석력",
+        "문제해결력",
+        "적응력",
+        "책임감",
+    ]
+
+    prompt = f"""다음 경험 내용을 분석하여 가장 관련성 높은 태그를 선택해주세요.
+
+경험 내용:
+제목: {experience.title}
+상황: {experience.situation}
+과제: {experience.task}
+행동: {experience.action}
+결과: {experience.result}
+
+선택 가능한 태그:
+{', '.join(available_tags)}
+
+요구사항:
+1. 경험 내용과 가장 관련성 높은 태그를 1~3개 선택
+2. 선택한 태그를 쉼표로 구분하여 반환
+3. 태그 이름만 정확히 반환 (추가 설명 없이)
+4. 예시: "전문성, 문제해결력, 소통력"
+
+선택한 태그:"""
+
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "당신은 경험을 분석하여 핵심 역량 태그를 추출하는 전문가입니다. 주어진 태그 중에서만 선택하고, 정확히 쉼표로 구분된 형식으로 반환합니다.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,
+            max_tokens=50,
+        )
+
+        tags = response.choices[0].message.content.strip()
+
+        # Validate that returned tags are from available tags
+        selected_tags = [tag.strip() for tag in tags.split(",")]
+        valid_tags = [tag for tag in selected_tags if tag in available_tags]
+
+        # Ensure 1-3 tags
+        if not valid_tags:
+            # Fallback: use first available tag
+            return available_tags[0]
+        elif len(valid_tags) > 3:
+            valid_tags = valid_tags[:3]
+
+        return ", ".join(valid_tags)
+
+    except Exception as e:
+        # Fallback: return default tag if AI fails
+        return "전문성"
+
+
 def create_experience(
     client: QdrantClient,
     user_id: str,
     experience_create: ExperienceCreate,
 ) -> Experience:
     """
-    Create a new experience with embedding.
+    Create a new experience with embedding and auto-generated tags.
 
     Args:
         client: Qdrant client
@@ -71,13 +149,27 @@ def create_experience(
     Raises:
         HTTPException: If OpenAI API fails
     """
-    # Create Experience object
-    experience = Experience(
+    # Create temporary Experience object for tag generation
+    temp_experience = Experience(
         id=str(uuid4()),
         user_id=user_id,
         **experience_create.model_dump(),
+        tags="",  # Will be generated
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
+    )
+
+    # Generate tags using AI
+    tags = _generate_tags(temp_experience)
+
+    # Create final Experience object with tags
+    experience = Experience(
+        id=temp_experience.id,
+        user_id=user_id,
+        **experience_create.model_dump(),
+        tags=tags,
+        created_at=temp_experience.created_at,
+        updated_at=temp_experience.updated_at,
     )
 
     # Generate embedding
@@ -212,7 +304,7 @@ def update_experience(
     experience_update: ExperienceUpdate,
 ) -> Experience:
     """
-    Update an existing experience.
+    Update an existing experience with auto-regenerated tags.
 
     Args:
         client: Qdrant client
@@ -234,11 +326,14 @@ def update_experience(
     updated_experience = existing.model_copy(update=update_data)
     updated_experience.updated_at = datetime.utcnow()
 
-    # Check if content changed (need to regenerate embedding)
+    # Check if content changed (need to regenerate embedding and tags)
     content_fields = {"title", "situation", "task", "action", "result"}
     content_changed = any(field in update_data for field in content_fields)
 
     if content_changed:
+        # Regenerate tags using AI
+        updated_experience.tags = _generate_tags(updated_experience)
+
         # Regenerate embedding
         try:
             text = _combine_text_for_embedding(updated_experience)

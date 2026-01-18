@@ -24,7 +24,7 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
     responses=RESPONSES_CREATE_WITH_AUTH,
     summary="경험 등록",
-    description="STAR 형식으로 새로운 경험을 등록합니다. 자동으로 임베딩이 생성되어 시맨틱 검색이 가능합니다.",
+    description="STAR 형식으로 새로운 경험을 등록합니다. AI가 자동으로 관련 태그(1~3개)를 생성하고, 임베딩을 생성하여 시맨틱 검색이 가능합니다.",
 )
 def create_experience(
     experience_create: ExperienceCreate,
@@ -42,6 +42,9 @@ def create_experience(
     - **action**: 행동 (STAR의 A)
     - **result**: 결과 (STAR의 R)
     - **category**: 카테고리 (technical, leadership 등)
+
+    AI가 경험 내용을 분석하여 다음 중 1~3개의 태그를 자동으로 생성합니다:
+    고객 이해력, 전문성, 소통력, 실행력, 분석력, 문제해결력, 적응력, 책임감
     """
     experience = service.create_experience(
         client=qdrant_client,
@@ -160,7 +163,7 @@ def get_experience(
     response_model=ExperienceRead,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="경험 수정",
-    description="기존 경험을 수정합니다. 내용이 변경되면 임베딩이 자동으로 재생성됩니다.",
+    description="기존 경험을 수정합니다. 내용이 변경되면 AI가 태그를 재생성하고 임베딩도 자동으로 재생성됩니다.",
 )
 def update_experience(
     experience_id: str,
@@ -175,7 +178,9 @@ def update_experience(
     - **experience_update**: 수정할 필드 (부분 업데이트 지원)
 
     All fields are optional. Only provided fields will be updated.
-    If content changes, the embedding will be regenerated automatically.
+    If content (title, situation, task, action, result) changes:
+    - AI will regenerate tags automatically
+    - Embedding will be regenerated for semantic search
     """
     experience = service.update_experience(
         client=qdrant_client,
