@@ -36,12 +36,12 @@ def create_experience(
 
     - **title**: 경험 제목
     - **date**: 경험 발생 날짜 (YYYY-MM-DD)
-    - **experience_type**: 경험 타입 (project, work, volunteer 등)
+    - **experience_type**: 경험 타입 (동아리 활동, 정규직, 봉사 활동 등)
     - **situation**: 상황 (STAR의 S)
     - **task**: 과제 (STAR의 T)
     - **action**: 행동 (STAR의 A)
     - **result**: 결과 (STAR의 R)
-    - **category**: 카테고리 (technical, leadership 등)
+    - **category**: 카테고리 (기술적 전문성, 주도적 실행력 등)
 
     AI가 경험 내용을 분석하여 다음 중 1~3개의 태그를 자동으로 생성합니다:
     고객 이해력, 전문성, 소통력, 실행력, 분석력, 문제해결력, 적응력, 책임감
