@@ -3,7 +3,7 @@ from uuid import UUID
 from typing import List
 
 from .models import ChatMessage, ChatRole
-from chats.models import Chat
+from src.chats.models import Chat
 
 def create_user_message(
     db: Session,

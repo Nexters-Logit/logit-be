@@ -11,6 +11,7 @@ from src.auth import router as auth_router
 from src.config import settings
 from src.projects import router as projects_router
 from src.users import router as users_router
+from src.chat_messages import router as chat_message_router
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -47,6 +48,11 @@ app.include_router(
     prefix=f"{settings.API_V1_STR}/projects",
     tags=["Projects"],
 )
+app.include_router(
+    chat_message_router.router,
+    prefix=f"{settings.API_V1_STR}/chats",
+    tags=["Chats"],
+    )
 
 
 @app.get("/")
