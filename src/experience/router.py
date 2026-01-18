@@ -1,6 +1,6 @@
 """Experience API endpoints."""
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from src.common.responses import RESPONSES_CREATE_WITH_AUTH, RESPONSES_CRUD_WITH_AUTH
 from src.experience import service
@@ -155,6 +155,13 @@ def get_experience(
         experience_id=experience_id,
         user_id=str(current_user.id),
     )
+
+    if not experience:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Experience not found",
+        )
+
     return ExperienceRead(**experience.model_dump())
 
 
@@ -181,6 +188,9 @@ def update_experience(
     If content (title, situation, task, action, result) changes:
     - AI will regenerate tags automatically
     - Embedding will be regenerated for semantic search
+
+    Raises:
+    - 404: Experience not found or doesn't belong to the current user
     """
     experience = service.update_experience(
         client=qdrant_client,
@@ -188,6 +198,13 @@ def update_experience(
         user_id=str(current_user.id),
         experience_update=experience_update,
     )
+
+    if not experience:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Experience not found or could not be updated",
+        )
+
     return ExperienceRead(**experience.model_dump())
 
 
@@ -196,7 +213,7 @@ def update_experience(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="경험 삭제",
-    description="경험을 영구적으로 삭제합니다.",
+    description="경험을 영구적으로 삭제합니다. 삭제 전에 소유권을 확인합니다.",
 )
 def delete_experience(
     experience_id: str,
@@ -208,9 +225,16 @@ def delete_experience(
 
     - **experience_id**: 경험 ID (UUID)
 
-    Returns 204 No Content on success.
-    Returns 404 if the experience doesn't exist or doesn't belong to the current user.
+    Returns:
+    - 204 No Content: 삭제 성공
+
+    Raises:
+    - 404: Experience not found or doesn't belong to the current user
+    - 401: Not authenticated
+    - 403: User is not active
     """
+    # Service에서 소유권 검증 후 삭제
+    # 존재하지 않거나 소유자가 아니면 404 발생
     service.delete_experience(
         client=qdrant_client,
         experience_id=experience_id,
