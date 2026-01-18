@@ -4,14 +4,31 @@ FastAPI application with domain-driven structure.
 Inspired by fastapi-best-practices and Netflix Dispatch.
 """
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.auth import router as auth_router
 from src.config import settings
+from src.database import init_qdrant_collection
+from src.experience import router as experience_router
 from src.projects import router as projects_router
 from src.users import router as users_router
 from src.chat_messages import router as chat_message_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifespan events.
+    Runs once on startup and cleanup on shutdown.
+    """
+    # Startup: Initialize Qdrant collection
+    init_qdrant_collection()
+    yield
+    # Shutdown: cleanup if needed
+
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -21,6 +38,7 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     description="Domain-Driven FastAPI with OAuth, JWT, and Modern Stack",
+    lifespan=lifespan,
 )
 
 # Configure CORS
@@ -50,9 +68,9 @@ app.include_router(
 )
 app.include_router(
     chat_message_router.router,
-    prefix=f"{settings.API_V1_STR}/chats",
-    tags=["Chats"],
-    )
+    prefix=f"{settings.API_V1_STR}/experiences",
+    tags=["Experiences"],
+)
 
 
 @app.get("/")
