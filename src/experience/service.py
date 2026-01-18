@@ -432,13 +432,13 @@ def search_experiences(
     )
 
     # Search
-    search_result = client.search(
+    search_result = client.query_points(
         collection_name=settings.QDRANT_COLLECTION_NAME,
-        query_vector=query_embedding,
+        query=query_embedding,
         query_filter=user_filter,
         limit=limit,
         with_payload=True,
-    )
+    ).points
 
     # Convert to (Experience, score) tuples
     results = [
