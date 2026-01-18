@@ -11,6 +11,9 @@ from alembic import context
 # Import all models to ensure they are registered with SQLModel
 from src.users.models import User  # noqa: F401
 from src.projects.models import Project  # noqa: F401
+from src.companies.models import Company  # noqa: F401
+from src.chats.models import Chat  # noqa: F401
+from src.chat_messages.models import ChatMessage  # noqa: F401
 from src.config import settings
 
 # this is the Alembic Config object
