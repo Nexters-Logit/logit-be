@@ -69,12 +69,12 @@ def sample_experience_data() -> dict:
     return {
         "title": "AI 챗봇 서비스 개발",
         "date": "2024-06-15",
-        "experience_type": "project",
+        "experience_type": "동아리 활동",
         "situation": "팀 프로젝트에서 사용자 문의 응대 자동화가 필요했습니다.",
         "task": "자연어 처리 기반 챗봇을 설계하고 구현해야 했습니다.",
         "action": "OpenAI API를 활용하여 RAG 기반 챗봇을 개발하고, FastAPI로 REST API를 구축했습니다.",
         "result": "응답 시간을 70% 단축하고 고객 만족도를 85%로 향상시켰습니다.",
-        "category": "technical_proficiency",
+        "category": "기술적 전문성",
     }
 
 
