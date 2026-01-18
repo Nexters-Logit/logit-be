@@ -29,7 +29,7 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_started
+        condition: service_healthy
     networks:
       - logit-network
     develop:
@@ -61,7 +61,7 @@ services:
     networks:
       - logit-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U logit -d logit_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -95,6 +95,12 @@ services:
       - qdrant_data:/qdrant/storage
     networks:
       - logit-network
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 10s bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
 volumes:
   postgres_data:
