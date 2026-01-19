@@ -1,29 +1,26 @@
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, Date, DateTime, Text
+from sqlalchemy import Column, DateTime, Text
 from sqlmodel import Field, SQLModel
 
 
-class Project(SQLModel, table=True):
-    """Project (프로젝트) - 지원하는 채용 공고 정보"""
+class Question(SQLModel, table=True):
+    """Question (자기소개서) - 채용 공고 문항 및 답변"""
 
-    __tablename__ = "projects"
+    __tablename__ = "questions"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
+    project_id: UUID = Field(foreign_key="projects.id", index=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)
 
-    company: str = Field(max_length=255, description="회사명")
-    employment_type: str | None = Field(default=None, max_length=100, description="고용형태 (정규직, 계약직 등)")
-    recruit_notice: str | None = Field(
+    question: str = Field(max_length=100, description="문항")  # 문항
+    max_length: int | None = Field(default=None, description="글자수 제한")
+    order: int = Field(default=1, description="문항 번호 (순서)")
+    answer: str | None = Field(
         default=None,
         sa_column=Column(Text, nullable=True),
-        description="채용공고 전체 내용",
-    )
-    due_date: date | None = Field(
-        default=None,
-        sa_column=Column(Date, nullable=True),
-        description="마감날짜",
+        description="자기소개서 답변",
     )
 
     created_at: datetime = Field(
@@ -37,4 +34,5 @@ class Project(SQLModel, table=True):
     deleted_at: datetime | None = Field(
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),
+        description="삭제 시간 (Soft Delete)",
     )

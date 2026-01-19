@@ -1,28 +1,52 @@
-from datetime import datetime
-from typing import Optional
+from datetime import date, datetime
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from src.projects.models import ProjectBase
+from src.questions.schemas import QuestionCreate, QuestionListItem
 
 
-class ProjectCreate(ProjectBase):
-    pass
+class ProjectCreate(BaseModel):
+    """프로젝트 생성 요청 (문항 포함)"""
+
+    company: str
+    employment_type: str | None = None
+    recruit_notice: str | None = None
+    due_date: date | None = None
+    questions: list[QuestionCreate] = []  # 문항 목록
 
 
 class ProjectUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    is_active: Optional[bool] = None
+    """프로젝트 수정 요청"""
 
-class TestResponse(BaseModel):
-    message: str
-    status: str
-    data: list[str]
+    company: str | None = None
+    employment_type: str | None = None
+    recruit_notice: str | None = None
+    due_date: date | None = None
 
-class ProjectRead(ProjectBase):
-    id: int
+
+class ProjectListItem(BaseModel):
+    """프로젝트 목록 조회 응답 (간략)"""
+
+    id: UUID
+    company: str  # 기업명
+    employment_type: str | None  # 직무명/고용형태
+    updated_at: datetime  # 최근 활동일
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProjectRead(BaseModel):
+    """프로젝트 상세 조회 응답"""
+
+    id: UUID
+    user_id: UUID
+    company: str
+    employment_type: str | None
+    recruit_notice: str | None
+    due_date: date | None
     created_at: datetime
     updated_at: datetime
-    
+    deleted_at: datetime | None
+
     model_config = ConfigDict(from_attributes=True)

@@ -48,7 +48,7 @@ async def create_assistant_chat(
         question_id=question.id,
         project_id=question.project_id,
         user_id=question.user_id,
-        role=ChatRole.ASSISTANT,
+        role=ChatRole.AI,
         content=content,
         experience_ids=experience_ids,
         is_draft=is_draft
