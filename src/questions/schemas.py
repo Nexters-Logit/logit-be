@@ -52,9 +52,3 @@ class QuestionListItem(BaseModel):
     answer: str | None
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class QuestionReorder(BaseModel):
-    """문항 순서 변경 요청"""
-
-    question_ids: list[UUID]  # 새로운 순서대로 정렬된 ID 목록

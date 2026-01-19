@@ -9,7 +9,6 @@ from src.questions.schemas import (
     QuestionCreate,
     QuestionListItem,
     QuestionRead,
-    QuestionReorder,
     QuestionUpdate,
 )
 from src.users.dependencies import ActiveUser, SessionDep
@@ -125,21 +124,8 @@ async def delete_question(
             status_code=status.HTTP_404_NOT_FOUND, detail="Question not found"
         )
     await service.delete_question(
-        session=session, db_question=question, project_id=project_id
-    )
-
-
-@router.patch("/reorder", response_model=List[QuestionListItem])
-async def reorder_questions(
-    project_id: UUID,
-    reorder_in: QuestionReorder,
-    session: SessionDep,
-    current_user: ActiveUser,
-):
-    """문항 순서 재정렬"""
-    return await service.reorder_questions(
         session=session,
+        db_question=question,
         project_id=project_id,
         user_id=current_user.id,
-        question_ids=reorder_in.question_ids,
     )
