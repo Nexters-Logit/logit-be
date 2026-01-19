@@ -43,11 +43,12 @@ async def create_project(
 async def get_projects(
     session: AsyncSession, user_id: UUID, skip: int = 0, limit: int = 100
 ) -> List[Project]:
-    """사용자의 프로젝트 목록 조회 (삭제되지 않은 것만)"""
+    """사용자의 프로젝트 목록 조회 (삭제되지 않은 것만, 최근 활동순)"""
     statement = (
         select(Project)
         .where(Project.user_id == user_id)
         .where(Project.deleted_at.is_(None))
+        .order_by(Project.updated_at.desc())
         .offset(skip)
         .limit(limit)
     )
@@ -58,7 +59,7 @@ async def get_projects(
 async def get_project(
     session: AsyncSession, project_id: UUID, user_id: UUID
 ) -> Optional[Project]:
-    """프로젝트 단건 조회 (삭제되지 않은 것만)"""
+    """프로젝트 단건 조회 (삭제되지 않은 것만, 조회 시 updated_at 갱신)"""
     statement = (
         select(Project)
         .where(Project.id == project_id)
@@ -66,7 +67,15 @@ async def get_project(
         .where(Project.deleted_at.is_(None))
     )
     result = await session.execute(statement)
-    return result.scalar_one_or_none()
+    project = result.scalar_one_or_none()
+
+    if project:
+        project.updated_at = datetime.now(timezone.utc)
+        session.add(project)
+        await session.commit()
+        await session.refresh(project)
+
+    return project
 
 
 async def update_project(

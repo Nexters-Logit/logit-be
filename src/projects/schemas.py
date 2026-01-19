@@ -31,8 +31,7 @@ class ProjectListItem(BaseModel):
     id: UUID
     company: str  # 기업명
     employment_type: str | None  # 직무명/고용형태
-    created_at: datetime  # 생성일
-    # chat_id: UUID | None  # TODO: 추후 chat 연동 시 추가
+    updated_at: datetime  # 최근 활동일
 
     model_config = ConfigDict(from_attributes=True)
 
