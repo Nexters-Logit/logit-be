@@ -2,10 +2,12 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func
 from sqlmodel import select
 
+from src.projects.models import Project
 from src.questions.models import Question
 from src.questions.schemas import QuestionBulkCreate, QuestionCreate, QuestionUpdate
 
@@ -30,6 +32,16 @@ async def create_question(
     user_id: UUID,
 ) -> Question:
     """문항 단건 생성"""
+
+    statement = select(Project.id).where(                                                                                                                                                          
+        Project.id == project_id,                                                                                                                                                                  
+        Project.user_id == user_id,                                                                                                                                                                
+        Project.deleted_at.is_(None)                                                                                                                                                               
+    )                                                                                                                                                                                              
+    result = await session.execute(statement)                                                                                                                                                      
+    if not result.scalar():                                                                                                                                                                        
+        raise HTTPException(status_code=404, detail="Project not found")
+
     db_question = Question(
         project_id=project_id,
         user_id=user_id,
