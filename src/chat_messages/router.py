@@ -1,12 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .schemas import MessageRequest, MessageResponse
-from .service import (
-    create_user_message,
-    create_assistant_message,
-    get_chat_by_id
-)
+from .service import send_message_flow
 from src.database import get_async_db
 
 router = APIRouter()
@@ -104,30 +100,12 @@ async def send_message(
     db: AsyncSession = Depends(get_async_db)
 ):
     """메시지 전송 API"""
-    
-    # 1. Chat 조회
-    chat = await get_chat_by_id(db, data.chat_id)
-    if not chat:
-        raise HTTPException(status_code=404, detail="Chat not found")
-    
-    # 2. 사용자 메시지 생성
-    user_msg = await create_user_message(
+
+    ai_msg = await send_message_flow(
         db=db,
-        chat=chat,
+        chat_id=data.chat_id,
         content=data.content,
-        experience_ids=data.experience_ids
-    )
-
-    # 3. AI 응답 생성 (임시)
-    ai_response = "테스트 응답입니다. RAG는 이후 구현"
-
-    # 4. AI 메시지 생성
-    ai_msg = await create_assistant_message(
-        db=db,
-        chat=chat,
-        content=ai_response,
-        user_content=data.content,
-        experience_ids=data.experience_ids
+        experience_ids=data.experience_ids,
     )
     
     return MessageResponse(
