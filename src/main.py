@@ -16,6 +16,7 @@ from src.experience import router as experience_router
 from src.projects import router as projects_router
 from src.questions import router as questions_router
 from src.users import router as users_router
+from src.chat_messages import router as chat_message_router
 
 
 @asynccontextmanager
@@ -76,7 +77,11 @@ app.include_router(
     prefix=f"{settings.API_V1_STR}/projects/{{project_id}}/questions",
     tags=["Questions"],
 )
-
+app.include_router(
+    chat_message_router.router,
+    prefix=settings.API_V1_STR,
+    tags=["ChatMessages"],
+)
 
 @app.get("/")
 async def root():
