@@ -25,7 +25,6 @@ class ChatMessage(SQLModel, table=True):
     chat_id: UUID = Field(foreign_key="chats.id", index=True)
     project_id: UUID = Field(foreign_key="projects.id", index=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)
-    company_id: UUID = Field(foreign_key="companies.id", index=True)
 
     # Fields
     role: ChatRole = Field(index=True)

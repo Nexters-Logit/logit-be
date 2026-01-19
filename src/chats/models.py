@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import ARRAY, Column, DateTime, Integer
+from sqlalchemy import Column, DateTime
 from sqlmodel import Field, SQLModel
 
 
@@ -15,7 +15,6 @@ class Chat(SQLModel, table=True):
     # Foreign keys
     project_id: UUID = Field(foreign_key="projects.id", index=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)
-    company_id: UUID = Field(foreign_key="companies.id", index=True)
 
     # Fields
     created_at: datetime = Field(

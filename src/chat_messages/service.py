@@ -6,7 +6,6 @@ from fastapi import HTTPException
 
 from .models import ChatMessage, ChatRole
 from src.chats.models import Chat
-from src.companies.models import Company  # noqa: F401 (needed for FK resolution)
 
 
 async def create_user_message(
@@ -21,7 +20,6 @@ async def create_user_message(
         chat_id=chat.id,
         project_id=chat.project_id,
         user_id=chat.user_id,
-        company_id=chat.company_id,
         role=ChatRole.USER,
         content=content,
         experience_ids=experience_ids
@@ -50,7 +48,6 @@ async def create_assistant_message(
         chat_id=chat.id,
         project_id=chat.project_id,
         user_id=chat.user_id,
-        company_id=chat.company_id,
         role=ChatRole.ASSISTANT,
         content=content,
         experience_ids=experience_ids,
