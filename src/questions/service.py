@@ -43,35 +43,6 @@ async def create_question(
     return db_question
 
 
-async def bulk_create_questions(
-    session: AsyncSession,
-    bulk_create: QuestionBulkCreate,
-    project_id: UUID,
-    user_id: UUID,
-) -> List[Question]:
-    """문항 일괄 생성"""
-    db_questions = []
-
-    for item in bulk_create.questions:
-        db_question = Question(
-            project_id=project_id,
-            user_id=user_id,
-            question=item.question,
-            max_length=item.max_length,
-            order=item.order,
-        )
-        session.add(db_question)
-        db_questions.append(db_question)
-
-    await session.commit()
-
-    # refresh all
-    for q in db_questions:
-        await session.refresh(q)
-
-    return db_questions
-
-
 async def get_questions(
     session: AsyncSession, project_id: UUID, user_id: UUID
 ) -> List[Question]:

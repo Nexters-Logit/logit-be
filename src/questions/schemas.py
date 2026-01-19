@@ -12,12 +12,6 @@ class QuestionCreate(BaseModel):
     order: int  # 순서
 
 
-class QuestionBulkCreate(BaseModel):
-    """문항 일괄 생성 요청"""
-
-    questions: list[QuestionCreate]
-
-
 class QuestionUpdate(BaseModel):
     """문항 수정 요청"""
 

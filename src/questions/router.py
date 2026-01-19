@@ -32,22 +32,6 @@ async def create_question(
     )
 
 
-@router.post("/bulk", response_model=List[QuestionListItem], status_code=status.HTTP_201_CREATED)
-async def create_questions_bulk(
-    project_id: UUID,
-    bulk_in: QuestionBulkCreate,
-    session: SessionDep,
-    current_user: ActiveUser,
-):
-    """문항 일괄 생성 (프로젝트 첫 생성 시)"""
-    return await service.bulk_create_questions(
-        session=session,
-        bulk_create=bulk_in,
-        project_id=project_id,
-        user_id=current_user.id,
-    )
-
-
 @router.get("/", response_model=List[QuestionListItem])
 async def read_questions(
     project_id: UUID,
