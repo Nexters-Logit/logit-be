@@ -3,10 +3,24 @@ from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func
 from sqlmodel import select
 
 from src.questions.models import Question
 from src.questions.schemas import QuestionBulkCreate, QuestionCreate, QuestionUpdate
+
+
+async def get_next_order(session: AsyncSession, project_id: UUID, user_id: UUID) -> int:
+    """프로젝트의 다음 order 값 계산 (max + 1)"""
+    statement = (
+        select(func.max(Question.order))
+        .where(Question.project_id == project_id)
+        .where(Question.user_id == user_id)
+        .where(Question.deleted_at.is_(None))
+    )
+    result = await session.execute(statement)
+    max_order = result.scalar()
+    return (max_order or 0) + 1
 
 
 async def create_question(
@@ -61,11 +75,12 @@ async def bulk_create_questions(
 async def get_questions(
     session: AsyncSession, project_id: UUID, user_id: UUID
 ) -> List[Question]:
-    """프로젝트의 문항 목록 조회 (order 순)"""
+    """프로젝트의 문항 목록 조회 (삭제되지 않은 것만, order 순)"""
     statement = (
         select(Question)
         .where(Question.project_id == project_id)
         .where(Question.user_id == user_id)
+        .where(Question.deleted_at.is_(None))
         .order_by(Question.order)
     )
     result = await session.execute(statement)
@@ -75,12 +90,13 @@ async def get_questions(
 async def get_question(
     session: AsyncSession, question_id: UUID, project_id: UUID, user_id: UUID
 ) -> Optional[Question]:
-    """문항 단건 조회"""
+    """문항 단건 조회 (삭제되지 않은 것만)"""
     statement = (
         select(Question)
         .where(Question.id == question_id)
         .where(Question.project_id == project_id)
         .where(Question.user_id == user_id)
+        .where(Question.deleted_at.is_(None))
     )
     result = await session.execute(statement)
     return result.scalar_one_or_none()
@@ -103,26 +119,12 @@ async def update_question(
 
 
 async def delete_question(
-    session: AsyncSession, db_question: Question, project_id: UUID, user_id: UUID
-) -> None:
-    """문항 삭제 및 order 재정렬"""
-    deleted_order = db_question.order
+    session: AsyncSession, db_question: Question
+) -> Question:
+    """문항 삭제 (Soft Delete)"""
+    db_question.deleted_at = datetime.now(timezone.utc)
 
-    # 문항 삭제
-    await session.delete(db_question)
-
-    # 삭제된 문항보다 뒤에 있는 문항들의 order를 -1 (user_id 필터 포함)
-    statement = (
-        select(Question)
-        .where(Question.project_id == project_id)
-        .where(Question.user_id == user_id)
-        .where(Question.order > deleted_order)
-    )
-    result = await session.execute(statement)
-    questions_to_update = result.scalars().all()
-
-    for q in questions_to_update:
-        q.order -= 1
-        session.add(q)
-
+    session.add(db_question)
     await session.commit()
+    await session.refresh(db_question)
+    return db_question

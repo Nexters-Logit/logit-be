@@ -112,7 +112,7 @@ async def delete_question(
     session: SessionDep,
     current_user: ActiveUser,
 ):
-    """문항 삭제 (order 자동 재정렬)"""
+    """문항 삭제 (Soft Delete)"""
     question = await service.get_question(
         session=session,
         question_id=question_id,
@@ -123,9 +123,4 @@ async def delete_question(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Question not found"
         )
-    await service.delete_question(
-        session=session,
-        db_question=question,
-        project_id=project_id,
-        user_id=current_user.id,
-    )
+    await service.delete_question(session=session, db_question=question)
