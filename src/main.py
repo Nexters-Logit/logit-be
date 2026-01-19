@@ -73,7 +73,7 @@ app.include_router(
 )
 app.include_router(
     chat_message_router.router,
-    prefix=f"{settings.API_V1_STR}/chats",
+    prefix=settings.API_V1_STR,
     tags=["ChatMessages"],
 )
 

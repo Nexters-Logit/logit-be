@@ -9,7 +9,7 @@ router = APIRouter()
 
 
 @router.post(
-        "/message", 
+        "/projects/chats/message", 
         response_model=MessageResponse,
         status_code=status.HTTP_200_OK,
         summary="메시지 전송",
