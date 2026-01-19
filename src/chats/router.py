@@ -23,12 +23,12 @@ async def send_chat(
 
     ai_msg = await send_chat_flow(
         db=db,
-        chat_id=data.chat_id,
+        question_id=data.question_id,
         content=data.content,
         experience_ids=data.experience_ids,
     )
-    
+
     return ChatResponse(
-        chatid=ai_msg.id,
+        chat_id=ai_msg.id,
         is_draft=ai_msg.is_draft
     )
