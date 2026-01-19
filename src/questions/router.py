@@ -5,7 +5,6 @@ from fastapi import APIRouter, HTTPException, status
 
 from src.questions import service
 from src.questions.schemas import (
-    QuestionBulkCreate,
     QuestionCreate,
     QuestionListItem,
     QuestionRead,

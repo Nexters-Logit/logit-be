@@ -9,7 +9,7 @@ from sqlmodel import select
 
 from src.projects.models import Project
 from src.questions.models import Question
-from src.questions.schemas import QuestionBulkCreate, QuestionCreate, QuestionUpdate
+from src.questions.schemas import QuestionCreate, QuestionUpdate
 
 
 async def get_next_order(session: AsyncSession, project_id: UUID, user_id: UUID) -> int:
