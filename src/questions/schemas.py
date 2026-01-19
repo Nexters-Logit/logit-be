@@ -32,7 +32,6 @@ class QuestionRead(BaseModel):
     id: UUID
     project_id: UUID
     user_id: UUID
-    company_id: int | None
     question: str
     max_length: int | None
     order: int

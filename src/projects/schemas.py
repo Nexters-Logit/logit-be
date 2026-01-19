@@ -13,7 +13,6 @@ class ProjectCreate(BaseModel):
     employment_type: str | None = None
     recruit_notice: str | None = None
     due_date: date | None = None
-    company_id: int | None = None
     questions: list[QuestionCreate] = []  # 문항 목록
 
 
@@ -24,7 +23,6 @@ class ProjectUpdate(BaseModel):
     employment_type: str | None = None
     recruit_notice: str | None = None
     due_date: date | None = None
-    company_id: int | None = None
 
 
 class ProjectListItem(BaseModel):
@@ -44,7 +42,6 @@ class ProjectRead(BaseModel):
 
     id: UUID
     user_id: UUID
-    company_id: int | None
     company: str
     employment_type: str | None
     recruit_notice: str | None
