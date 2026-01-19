@@ -4,22 +4,22 @@ from uuid import UUID
 from typing import List
 from fastapi import HTTPException
 
-from .models import ChatMessage, ChatRole
-from src.chats.models import Chat
+from .models import Chat, ChatRole
+from src.questions.models import Question
 
 
-async def create_user_message(
+async def create_user_chat(
     db: AsyncSession,
-    chat: Chat,
+    question: Question,
     content: str,
     experience_ids: List[str] | None = None
-) -> ChatMessage:
+) -> Chat:
     """사용자 메시지 생성"""
 
-    user_msg = ChatMessage(
-        chat_id=chat.id,
-        project_id=chat.project_id,
-        user_id=chat.user_id,
+    user_msg = Chat(
+        question_id=question.id,
+        project_id=question.project_id,
+        user_id=question.user_id,
         role=ChatRole.USER,
         content=content,
         experience_ids=experience_ids
@@ -32,22 +32,22 @@ async def create_user_message(
     return user_msg
 
 
-async def create_assistant_message(
+async def create_assistant_chat(
     db: AsyncSession,
-    chat: Chat,
+    question: Question,
     content: str,
     user_content: str,
     experience_ids: List[str] | None = None
-) -> ChatMessage:
+) -> Chat:
     """AI 메시지 생성"""
 
     # 초안 생성 의도 감지
     is_draft = detect_draft_intent(user_content)
 
-    ai_msg = ChatMessage(
-        chat_id=chat.id,
-        project_id=chat.project_id,
-        user_id=chat.user_id,
+    ai_msg = Chat(
+        question_id=question.id,
+        project_id=question.project_id,
+        user_id=question.user_id,
         role=ChatRole.ASSISTANT,
         content=content,
         experience_ids=experience_ids,
@@ -61,10 +61,10 @@ async def create_assistant_message(
     return ai_msg
 
 
-async def get_chat_by_id(db: AsyncSession, chat_id: UUID) -> Chat | None:
-    """Chat 조회"""
+async def get_question_by_id(db: AsyncSession, question_id: UUID) -> Question | None:
+    """Question 조회"""
 
-    statement = select(Chat).where(Chat.id == chat_id)
+    statement = select(Question).where(Question.id == question_id)
     result = await db.execute(statement)
     return result.scalars().first()
 
@@ -78,23 +78,23 @@ def detect_draft_intent(content: str) -> bool:
 
     return any(keyword in content_lower for keyword in keywords)
 
-async def send_message_flow(
+async def send_chat_flow(
     db: AsyncSession,
     *,
-    chat_id: UUID,
+    question_id: UUID,
     content: str,
     experience_ids: list[str] | None = None,
-) -> ChatMessage:
+) -> Chat:
     """메시지 전송 전체 플로우"""
 
-    chat = await get_chat_by_id(db, chat_id)
-    if not chat:
-        raise HTTPException(status_code=404, detail="Chat not found")
+    question = await get_question_by_id(db, question_id)
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
 
     # 사용자 메시지
-    await create_user_message(
+    await create_user_chat(
         db=db,
-        chat=chat,
+        question=question,
         content=content,
         experience_ids=experience_ids,
     )
@@ -103,9 +103,9 @@ async def send_message_flow(
     ai_response = "테스트 응답입니다. RAG는 이후 구현"
 
     # AI 메시지
-    ai_msg = await create_assistant_message(
+    ai_msg = await create_assistant_chat(
         db=db,
-        chat=chat,
+        question=question,
         content=ai_response,
         user_content=content,
         experience_ids=experience_ids,
