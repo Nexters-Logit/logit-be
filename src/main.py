@@ -14,6 +14,7 @@ from src.config import settings
 from src.database import init_qdrant_collection
 from src.experience import router as experience_router
 from src.projects import router as projects_router
+from src.questions import router as questions_router
 from src.users import router as users_router
 
 
@@ -69,6 +70,11 @@ app.include_router(
     experience_router.router,
     prefix=f"{settings.API_V1_STR}/experiences",
     tags=["Experiences"],
+)
+app.include_router(
+    questions_router.router,
+    prefix=f"{settings.API_V1_STR}/projects/{{project_id}}/questions",
+    tags=["Questions"],
 )
 
 
