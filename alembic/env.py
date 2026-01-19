@@ -9,8 +9,6 @@ from sqlmodel import SQLModel
 from alembic import context
 
 # Import all models to ensure they are registered with SQLModel
-from src.users.models import User  # noqa: F401
-from src.projects.models import Project  # noqa: F401
 from src.config import settings
 
 # this is the Alembic Config object

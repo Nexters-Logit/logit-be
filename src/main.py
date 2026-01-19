@@ -15,6 +15,7 @@ from src.database import init_qdrant_collection
 from src.experience import router as experience_router
 from src.projects import router as projects_router
 from src.users import router as users_router
+from src.chat_messages import router as chat_message_router
 
 
 @asynccontextmanager
@@ -69,6 +70,11 @@ app.include_router(
     experience_router.router,
     prefix=f"{settings.API_V1_STR}/experiences",
     tags=["Experiences"],
+)
+app.include_router(
+    chat_message_router.router,
+    prefix=settings.API_V1_STR,
+    tags=["ChatMessages"],
 )
 
 
