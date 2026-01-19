@@ -3,6 +3,7 @@ from enum import Enum
 from uuid import UUID, uuid4
 
 from sqlalchemy import ARRAY, Column, DateTime, String
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlmodel import Field, SQLModel
 
 

@@ -113,21 +113,21 @@ async def send_message(
     # 2. 사용자 메시지 생성
     user_msg = await create_user_message(
         db=db,
-        chat_id=data.chat_id,
+        chat=chat,
         content=data.content,
         experience_ids=data.experience_ids
     )
-    
+
     # 3. AI 응답 생성 (임시)
     ai_response = "테스트 응답입니다. RAG는 이후 구현"
-    
+
     # 4. AI 메시지 생성
     ai_msg = await create_assistant_message(
         db=db,
-        chat_id=data.chat_id,
+        chat=chat,
         content=ai_response,
-        experience_ids=data.experience_ids,
-        user_content=data.content
+        user_content=data.content,
+        experience_ids=data.experience_ids
     )
     
     return MessageResponse(
