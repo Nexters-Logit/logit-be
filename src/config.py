@@ -34,7 +34,11 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "Logit API"
     VERSION: str = "1.0.0"
-    ENVIRONMENT: Literal["local", "staging", "production"] = "local"
+    ENVIRONMENT: Literal["local", "dev", "production"] = "local"
+
+    # Docs Authentication (for dev environment)
+    DOCS_USERNAME: str = "admin"
+    DOCS_PASSWORD: str = "admin"  # Override in .env for dev
 
     # Security - JWT Token Settings
     SECRET_KEY: str  # Must be set in .env!
