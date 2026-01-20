@@ -4,10 +4,14 @@ FastAPI application with domain-driven structure.
 Inspired by fastapi-best-practices and Netflix Dispatch.
 """
 
+import secrets
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi.openapi.utils import get_openapi
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from src.auth import router as auth_router
 from src.config import settings
@@ -17,6 +21,28 @@ from src.projects import router as projects_router
 from src.questions import router as questions_router
 from src.users import router as users_router
 from src.chats import router as chats_router
+
+# HTTP Basic Auth for docs
+security = HTTPBasic()
+
+
+def verify_docs_credentials(credentials: HTTPBasicCredentials = Depends(security)):
+    """Verify credentials for docs access"""
+    correct_username = secrets.compare_digest(
+        credentials.username.encode("utf-8"),
+        settings.DOCS_USERNAME.encode("utf-8")
+    )
+    correct_password = secrets.compare_digest(
+        credentials.password.encode("utf-8"),
+        settings.DOCS_PASSWORD.encode("utf-8")
+    )
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
 
 
 @asynccontextmanager
@@ -31,16 +57,44 @@ async def lifespan(app: FastAPI):
     # Shutdown: cleanup if needed
 
 
+# Docs authentication required for dev environment
+docs_auth_required = settings.ENVIRONMENT == "dev"
+
 # Initialize FastAPI app
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    openapi_url=None if docs_auth_required else f"{settings.API_V1_STR}/openapi.json",
+    docs_url=None if docs_auth_required else "/docs",
+    redoc_url=None if docs_auth_required else "/redoc",
     description="Domain-Driven FastAPI with OAuth, JWT, and Modern Stack",
     lifespan=lifespan,
 )
+
+# Custom docs endpoints with authentication (for dev/staging)
+if docs_auth_required:
+    @app.get("/openapi.json", include_in_schema=False)
+    async def get_openapi_json(username: str = Depends(verify_docs_credentials)):
+        return get_openapi(
+            title=settings.PROJECT_NAME,
+            version=settings.VERSION,
+            description="Domain-Driven FastAPI with OAuth, JWT, and Modern Stack",
+            routes=app.routes,
+        )
+
+    @app.get("/docs", include_in_schema=False)
+    async def custom_swagger_ui(username: str = Depends(verify_docs_credentials)):
+        return get_swagger_ui_html(
+            openapi_url="/openapi.json",
+            title=f"{settings.PROJECT_NAME} - Swagger UI",
+        )
+
+    @app.get("/redoc", include_in_schema=False)
+    async def custom_redoc(username: str = Depends(verify_docs_credentials)):
+        return get_redoc_html(
+            openapi_url="/openapi.json",
+            title=f"{settings.PROJECT_NAME} - ReDoc",
+        )
 
 # Configure CORS
 app.add_middleware(
