@@ -73,7 +73,7 @@ async def create_dev_user():
                     "id": str(DEV_USER_ID),
                     "email": DEV_USER_EMAIL,
                     "full_name": DEV_USER_NAME,
-                    "oauth_provider": OAuthProvider.GOOGLE.value,
+                    "oauth_provider": "GOOGLE",
                     "oauth_provider_id": "dev-test-user",
                     "is_active": True,
                     "terms_agreed": True,
