@@ -11,6 +11,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./alembic:/app/alembic
+      - ./scripts:/app/scripts
     env_file:
       - .env
     environment:
