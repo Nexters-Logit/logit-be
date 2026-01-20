@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.security import HTTPBasic, HTTPBasicCredentials, OAuth2PasswordBearer, SecurityScopes
 
 from src.auth import router as auth_router
 from src.config import settings
@@ -64,29 +64,53 @@ docs_auth_required = settings.ENVIRONMENT == "dev"
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    openapi_url=None if docs_auth_required else f"{settings.API_V1_STR}/openapi.json",
+    openapi_url=f"{settings.API_V1_STR}/openapi.json", # Always define openapi_url
     docs_url=None if docs_auth_required else "/docs",
     redoc_url=None if docs_auth_required else "/redoc",
     description="Domain-Driven FastAPI with OAuth, JWT, and Modern Stack",
     lifespan=lifespan,
 )
 
-# Custom docs endpoints with authentication (for dev/staging)
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    openapi_schema["components"]["securitySchemes"] = {
+        "Bearer Auth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "Enter the JWT token with the 'Bearer ' prefix, e.g., 'Bearer abcde12345'.",
+        }
+    }
+
+    for path in openapi_schema["paths"].values():
+        for operation in path.values():
+            if "security" in operation:
+                operation["security"] = [{"Bearer Auth": []}]
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
 if docs_auth_required:
     @app.get("/openapi.json", include_in_schema=False)
     async def get_openapi_json(username: str = Depends(verify_docs_credentials)):
-        return get_openapi(
-            title=settings.PROJECT_NAME,
-            version=settings.VERSION,
-            description="Domain-Driven FastAPI with OAuth, JWT, and Modern Stack",
-            routes=app.routes,
-        )
+        return app.openapi() # Call the custom openapi function to get the schema
 
     @app.get("/docs", include_in_schema=False)
     async def custom_swagger_ui(username: str = Depends(verify_docs_credentials)):
         return get_swagger_ui_html(
             openapi_url="/openapi.json",
             title=f"{settings.PROJECT_NAME} - Swagger UI",
+            oauth2_redirect_url=None,
+            init_oauth=None,
         )
 
     @app.get("/redoc", include_in_schema=False)
