@@ -84,11 +84,12 @@ async def send_chat_flow(
     question_id: UUID,
     content: str,
     experience_ids: list[str] | None = None,
+    user_id: UUID,
 ) -> Chat:
     """메시지 전송 전체 플로우"""
 
     question = await get_question_by_id(db, question_id)
-    if not question:
+    if not question or question.user_id != user_id:
         raise HTTPException(status_code=404, detail="Question not found")
 
     # 사용자 메시지

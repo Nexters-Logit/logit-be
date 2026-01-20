@@ -34,8 +34,9 @@ DEV_USER_NAME = "Dev Test User"
 
 
 def create_dev_token() -> str:
-    """만료되지 않는 (100년) Access Token 생성"""
-    expire = datetime.now(timezone.utc) + timedelta(days=36500)  # 100년
+    """고정된 Dev Access Token 생성 (2099년 만료)"""
+    # 고정된 만료일 사용 (매번 동일한 토큰 생성)
+    expire = datetime(2099, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
     to_encode = {
         "exp": expire,
         "sub": str(DEV_USER_ID),

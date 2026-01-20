@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Depends, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, status
 
 from .schemas import ChatRequest, ChatResponse
 from .service import send_chat_flow
-from src.database import get_async_db
 from .swagger import SEND_CHAT_SWAGGER
+from src.users.dependencies import ActiveUser, SessionDep
 
 router = APIRouter()
 
@@ -17,15 +16,17 @@ router = APIRouter()
 )
 async def send_chat(
     data: ChatRequest,
-    db: AsyncSession = Depends(get_async_db)
+    session: SessionDep,
+    current_user: ActiveUser,
 ):
     """메시지 전송 API"""
 
     ai_msg = await send_chat_flow(
-        db=db,
+        db=session,
         question_id=data.question_id,
         content=data.content,
         experience_ids=data.experience_ids,
+        user_id=current_user.id,
     )
 
     return ChatResponse(
