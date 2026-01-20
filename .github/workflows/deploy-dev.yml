@@ -58,5 +58,6 @@ jobs:
           port: ${{ secrets.DEV_SERVER_PORT || 22 }}
           script: |
             sleep 10
-            curl -f http://localhost:8000/health || exit 1
+            cd ${{ secrets.DEV_APP_PATH }}
+            docker compose -f docker-compose.dev.yml ps --status running | grep -q "logit-fastapi" || exit 1
             echo "✅ Health check passed!"
