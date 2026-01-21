@@ -1,38 +1,43 @@
-from fastapi import APIRouter, status, HTTPException, Depends
+from uuid import UUID
 
-from .schemas import ChatRequest, ChatResponse, ChatHistoryResponse, UpdateAnswerResponse
-from .service import send_chat_flow, get_chat_history_response, update_question_answer
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
+
+from .schemas import ChatRequest, ChatHistoryResponse, UpdateAnswerResponse
+from .service import send_chat_stream, get_chat_history_response, update_question_answer
 from .swagger import SEND_CHAT_SWAGGER, GET_CHAT_HISTORY_SWAGGER, UPDATE_ANSWER_SWAGGER
 from src.users.dependencies import ActiveUser, SessionDep
-from uuid import UUID
+from src.experience.dependencies import QdrantDep
 
 router = APIRouter()
 
 
 @router.post(
     "/projects/chats",
-    response_model=ChatResponse,
-    status_code=status.HTTP_200_OK,
     **SEND_CHAT_SWAGGER,
 )
 async def send_chat(
     data: ChatRequest,
     session: SessionDep,
+    qdrant: QdrantDep,
     current_user: ActiveUser,
 ):
-    """메시지 전송 API"""
+    """메시지 전송 API (SSE 스트리밍)"""
 
-    ai_msg = await send_chat_flow(
-        db=session,
-        question_id=data.question_id,
-        content=data.content,
-        experience_ids=data.experience_ids,
-        user_id=current_user.id,
-    )
-
-    return ChatResponse(
-        chat_id=ai_msg.id,
-        is_draft=ai_msg.is_draft
+    return StreamingResponse(
+        send_chat_stream(
+            db=session,
+            qdrant_client=qdrant,
+            question_id=data.question_id,
+            content=data.content,
+            experience_ids=data.experience_ids,
+            user_id=current_user.id,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
     )
 
 

@@ -65,24 +65,6 @@ class ChatRequest(BaseModel):
         }
 
 
-class ChatResponse(BaseModel):
-    """메시지 전송 응답"""
-    
-    chat_id: UUID
-    is_draft: bool
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "chat_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-                    "is_draft": True
-                }
-            ]
-        }
-    }
-
-
 class ChatHistoryItem(BaseModel):
     """개별 채팅 메시지"""
 
