@@ -14,8 +14,10 @@ GET_CHAT_HISTORY_SWAGGER = {
 **각 메시지 정보:**
 - role: "user" 또는 "ai"
 - content: 메시지 내용
-- experience_ids: 참조된 경험 ID 목록
 - is_draft: 자기소개서 초안 여부
+
+**추가 반환 정보:**
+- experience_ids: 최근 선택된 경험 ID 목록 (응답 최상위)
 """,
     "responses": {
         status.HTTP_200_OK: {
