@@ -5,7 +5,7 @@ from typing import List
 from fastapi import HTTPException
 
 from .models import Chat, ChatRole
-from .schemas import ChatHistoryResponse, ChatHistoryItem
+from .schemas import ChatHistoryResponse, ChatHistoryItem, UpdateAnswerResponse
 from src.questions.models import Question
 from src.projects.models import Project
 
@@ -172,4 +172,34 @@ async def get_chat_history_response(
             )
             for msg in messages
         ]
+    )
+
+
+async def update_question_answer(
+    db: AsyncSession,
+    chat_id: UUID,
+    user_id: UUID
+) -> UpdateAnswerResponse | None:
+    """AI 답변으로 자기소개서 답변 업데이트"""
+
+    # 1. Chat 조회
+    chat_stmt = select(Chat).where(Chat.id == chat_id)
+    chat_result = await db.execute(chat_stmt)
+    chat = chat_result.scalar_one_or_none()
+
+    if not chat or chat.user_id != user_id:
+        return None
+
+    # 2. Question 조회 및 answer 업데이트
+    question = await get_question_by_id(db, chat.question_id)
+    if not question:
+        return None
+
+    question.answer = chat.content
+    await db.commit()
+    await db.refresh(question)
+
+    return UpdateAnswerResponse(
+        question_id=question.id,
+        answer=question.answer
     )

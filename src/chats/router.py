@@ -1,7 +1,7 @@
 from fastapi import APIRouter, status, HTTPException, Depends
 
-from .schemas import ChatRequest, ChatResponse, ChatHistoryResponse
-from .service import send_chat_flow, get_chat_history_response
+from .schemas import ChatRequest, ChatResponse, ChatHistoryResponse, UpdateAnswerRequest, UpdateAnswerResponse
+from .service import send_chat_flow, get_chat_history_response, update_question_answer
 from .swagger import SEND_CHAT_SWAGGER
 from src.users.dependencies import ActiveUser, SessionDep
 from uuid import UUID
@@ -48,5 +48,21 @@ async def get_chat_messages(
 
     if not response:
         raise HTTPException(404, "Question not found")
+
+    return response
+
+
+@router.patch("/projects/questions/answer", response_model=UpdateAnswerResponse)
+async def update_answer(
+    data: UpdateAnswerRequest,
+    session: SessionDep,
+    current_user: ActiveUser
+):
+    """자기소개서 답변 업데이트 API"""
+
+    response = await update_question_answer(session, data.chat_id, current_user.id)
+
+    if not response:
+        raise HTTPException(404, "Chat not found")
 
     return response
