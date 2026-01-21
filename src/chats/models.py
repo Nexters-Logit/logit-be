@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import ARRAY, Column, DateTime, String
+from sqlalchemy import ARRAY, Column, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlmodel import Field, SQLModel
 
@@ -28,7 +28,7 @@ class Chat(SQLModel, table=True):
 
     # Fields
     role: ChatRole = Field(index=True)
-    content: str
+    content: str = Field(sa_column=Column(Text, nullable=False))
     experience_ids: list[str] | None = Field(
         default=None,
         sa_column=Column(ARRAY(String)),    
