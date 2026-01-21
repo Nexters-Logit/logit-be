@@ -1,7 +1,5 @@
 from fastapi import status
 
-from .schemas import SSEContentEvent, SSEDoneEvent, SSEErrorEvent
-
 GET_CHAT_HISTORY_SWAGGER = {
     "summary": "채팅 히스토리 조회",
     "description": """
