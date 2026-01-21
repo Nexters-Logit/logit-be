@@ -194,7 +194,7 @@ async def update_question_answer(
     chat_result = await db.execute(chat_stmt)
     chat = chat_result.scalar_one_or_none()
 
-    if not chat or chat.user_id != user_id:
+    if chat.role != ChatRole.AI or not chat.is_draft:
         return None
 
     # 2. Question 조회 및 answer 업데이트
