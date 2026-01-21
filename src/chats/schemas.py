@@ -89,7 +89,6 @@ class ChatHistoryItem(BaseModel):
     id: UUID
     role: str  # "user" or "ai"
     content: str
-    experience_ids: List[str] | None
     is_draft: bool
     created_at: datetime
 
@@ -98,12 +97,13 @@ class ChatHistoryItem(BaseModel):
 
 class ChatHistoryResponse(BaseModel):
     """채팅 히스토리 조회 응답"""
-    
+
     project_name: str
     created_at: str
     question_id: UUID
     question: str
     chats: List[ChatHistoryItem]
+    experience_ids: List[str] = []
     
     model_config = {
         "json_schema_extra": {
@@ -118,9 +118,6 @@ class ChatHistoryResponse(BaseModel):
                             "id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
                             "role": "user",
                             "content": "협업 경험 써줘",
-                            "experience_ids": [
-                                "7c9e6679-7425-40de-944b-e07fc1f90ae7"
-                            ],
                             "is_draft": False,
                             "created_at": "2026-01-20T10:00:00Z"
                         },
@@ -128,12 +125,12 @@ class ChatHistoryResponse(BaseModel):
                             "id": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
                             "role": "ai",
                             "content": "Cardify 프로젝트에서...",
-                            "experience_ids": [
-                                "7c9e6679-7425-40de-944b-e07fc1f90ae7"
-                            ],
                             "is_draft": True,
                             "created_at": "2026-01-20T10:00:05Z"
                         }
+                    ],
+                    "experience_ids": [
+                        "7c9e6679-7425-40de-944b-e07fc1f90ae7"
                     ]
                 }
             ]

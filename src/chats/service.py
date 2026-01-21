@@ -145,17 +145,24 @@ async def get_chat_history_response(
     messages_stmt = select(Chat)\
         .where(Chat.question_id == question_id)\
         .order_by(Chat.created_at)
-    
+
     messages_result = await db.execute(messages_stmt)
     messages = messages_result.scalars().all()
-    
-    # 4. project_name 생성: "company_job"
-    project_name = f"{project.company}_{project.employment_type}" # todo: 이후에 job으로 수정
-    
-    # 5. created_at 포맷: "2026.01.20"
+
+    # 4. 가장 최근 experience_ids 조회 (역순으로 찾기)
+    latest_experience_ids = []
+    for msg in reversed(messages):
+        if msg.experience_ids:
+            latest_experience_ids = msg.experience_ids
+            break
+
+    # 5. project_name 생성: "company_job"
+    project_name = f"{project.company}_{project.employment_type}"  # todo: 이후에 job으로 수정
+
+    # 6. created_at 포맷: "2026.01.20"
     created_at_str = project.created_at.strftime("%Y.%m.%d")
-    
-    # 6. 응답 생성
+
+    # 7. 응답 생성
     return ChatHistoryResponse(
         project_name=project_name,
         created_at=created_at_str,
@@ -166,12 +173,12 @@ async def get_chat_history_response(
                 id=msg.id,
                 role=msg.role.value,
                 content=msg.content,
-                experience_ids=msg.experience_ids,
                 is_draft=msg.is_draft,
                 created_at=msg.created_at
             )
             for msg in messages
-        ]
+        ],
+        experience_ids=latest_experience_ids
     )
 
 
