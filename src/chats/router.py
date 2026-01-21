@@ -14,6 +14,7 @@ router = APIRouter()
 
 @router.post(
     "/projects/chats",
+    response_class=StreamingResponse,
     **SEND_CHAT_SWAGGER,
 )
 async def send_chat(
