@@ -5,7 +5,9 @@ from typing import List
 from fastapi import HTTPException
 
 from .models import Chat, ChatRole
+from .schemas import ChatHistoryResponse, ChatHistoryItem
 from src.questions.models import Question
+from src.projects.models import Project
 
 
 async def create_user_chat(
@@ -78,6 +80,7 @@ def detect_draft_intent(content: str) -> bool:
 
     return any(keyword in content_lower for keyword in keywords)
 
+
 async def send_chat_flow(
     db: AsyncSession,
     *,
@@ -113,3 +116,60 @@ async def send_chat_flow(
     )
 
     return ai_msg
+
+
+async def get_chat_history_response(
+    db: AsyncSession,
+    question_id: UUID,
+    user_id: UUID
+) -> ChatHistoryResponse | None:
+    """채팅 히스토리 조회"""
+
+    # 1. Question 조회
+    question_stmt = select(Question).where(Question.id == question_id)
+    question_result = await db.execute(question_stmt)
+    question = question_result.scalar_one_or_none()
+
+    if not question or question.user_id != user_id:
+        return None
+    
+    # 2. Project 조회
+    project_stmt = select(Project).where(Project.id == question.project_id)
+    project_result = await db.execute(project_stmt)
+    project = project_result.scalar_one_or_none()
+
+    if not project:
+        return None
+
+    # 3. ChatMessage 조회 (시간순 정렬)
+    messages_stmt = select(Chat)\
+        .where(Chat.question_id == question_id)\
+        .order_by(Chat.created_at)
+    
+    messages_result = await db.execute(messages_stmt)
+    messages = messages_result.scalars().all()
+    
+    # 4. project_name 생성: "company_job"
+    project_name = f"{project.company}_{project.employment_type}" # todo: 이후에 job으로 수정
+    
+    # 5. created_at 포맷: "2026.01.20"
+    created_at_str = project.created_at.strftime("%Y.%m.%d")
+    
+    # 6. 응답 생성
+    return ChatHistoryResponse(
+        project_name=project_name,
+        created_at=created_at_str,
+        question_id=question.id,
+        question=question.question,
+        chats=[
+            ChatHistoryItem(
+                id=msg.id,
+                role=msg.role.value,
+                content=msg.content,
+                experience_ids=msg.experience_ids,
+                is_draft=msg.is_draft,
+                created_at=msg.created_at
+            )
+            for msg in messages
+        ]
+    )

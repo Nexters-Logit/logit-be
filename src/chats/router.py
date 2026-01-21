@@ -1,9 +1,10 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, status, HTTPException, Depends
 
-from .schemas import ChatRequest, ChatResponse
-from .service import send_chat_flow
+from .schemas import ChatRequest, ChatResponse, ChatHistoryResponse
+from .service import send_chat_flow, get_chat_history_response
 from .swagger import SEND_CHAT_SWAGGER
 from src.users.dependencies import ActiveUser, SessionDep
+from uuid import UUID
 
 router = APIRouter()
 
@@ -33,3 +34,19 @@ async def send_chat(
         chat_id=ai_msg.id,
         is_draft=ai_msg.is_draft
     )
+
+
+@router.get("/projects/chats/{question_id}", response_model=ChatHistoryResponse)
+async def get_chat_messages(
+    question_id: UUID,
+    session: SessionDep,
+    current_user: ActiveUser
+):
+    """채팅 히스토리 조회 API"""
+
+    response = await get_chat_history_response(session, question_id, current_user.id)
+
+    if not response:
+        raise HTTPException(404, "Question not found")
+
+    return response
