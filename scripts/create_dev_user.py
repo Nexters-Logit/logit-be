@@ -105,8 +105,9 @@ async def create_dev_user():
 
 
 if __name__ == "__main__":
-    if settings.ENVIRONMENT == "production":
-        print("❌ 프로덕션 환경에서는 실행할 수 없습니다!")
+    # dev 또는 local 환경에서만 실행 가능
+    if settings.ENVIRONMENT not in ["dev", "local"]:
+        print(f"❌ dev 또는 local 환경에서만 실행할 수 있습니다! (현재: {settings.ENVIRONMENT})")
         sys.exit(1)
 
     asyncio.run(create_dev_user())
