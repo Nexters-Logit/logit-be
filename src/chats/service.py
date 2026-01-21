@@ -1,11 +1,14 @@
+import json
+from typing import AsyncGenerator, List
+from uuid import UUID
+
+from qdrant_client import QdrantClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-from uuid import UUID
-from typing import List
-from fastapi import HTTPException
 
 from .models import Chat, ChatRole
 from .schemas import ChatHistoryResponse, ChatHistoryItem, UpdateAnswerResponse
+from .llm_service import generate_ai_response_stream
 from src.questions.models import Question
 from src.projects.models import Project
 
@@ -81,41 +84,95 @@ def detect_draft_intent(content: str) -> bool:
     return any(keyword in content_lower for keyword in keywords)
 
 
-async def send_chat_flow(
+async def send_chat_stream(
     db: AsyncSession,
+    qdrant_client: QdrantClient,
     *,
     question_id: UUID,
     content: str,
     experience_ids: list[str] | None = None,
     user_id: UUID,
-) -> Chat:
-    """메시지 전송 전체 플로우"""
+) -> AsyncGenerator[str, None]:
+    """메시지 전송 및 AI 응답 스트리밍"""
 
+    # 1. Question 조회
     question = await get_question_by_id(db, question_id)
     if not question or question.user_id != user_id:
-        raise HTTPException(status_code=404, detail="Question not found")
+        yield f"data: {json.dumps({'type': 'error', 'message': 'Question not found'}, ensure_ascii=False)}\n\n"
+        return
 
-    # 사용자 메시지
-    await create_user_chat(
+    # 2. Project 조회
+    project_stmt = select(Project).where(Project.id == question.project_id)
+    project_result = await db.execute(project_stmt)
+    project = project_result.scalar_one_or_none()
+    if not project:
+        yield f"data: {json.dumps({'type': 'error', 'message': 'Project not found'}, ensure_ascii=False)}\n\n"
+        return
+
+    # 3. 사용자 메시지 저장
+    user_chat = await create_user_chat(
         db=db,
         question=question,
         content=content,
         experience_ids=experience_ids,
     )
 
-    # AI 응답 (임시)
-    ai_response = "테스트 응답입니다. RAG는 이후 구현"
+    # 4. 채팅 히스토리 조회 (현재 메시지 제외)
+    chat_history = await get_chat_history_by_question(db, question_id)
+    chat_history = [c for c in chat_history if c.id != user_chat.id]
 
-    # AI 메시지
-    ai_msg = await create_assistant_chat(
-        db=db,
-        question=question,
-        content=ai_response,
-        user_content=content,
+    # 5. 초안 여부 판단
+    is_draft = detect_draft_intent(content)
+
+    # 6. AI 응답 스트리밍
+    full_content = ""
+    async for chunk_json in generate_ai_response_stream(
+        user_message=content,
+        question_content=question.question,
+        max_length=question.max_length,
+        company=project.company,
+        recruit_notice=project.recruit_notice,
         experience_ids=experience_ids,
-    )
+        chat_history=chat_history,
+        qdrant_client=qdrant_client,
+        user_id=str(user_id),
+    ):
+        chunk_data = json.loads(chunk_json)
 
-    return ai_msg
+        if chunk_data["type"] == "content":
+            full_content += chunk_data["content"]
+            yield f"data: {chunk_json}\n\n"
+
+        elif chunk_data["type"] == "done":
+            # 7. AI 메시지 저장
+            ai_chat = await create_assistant_chat(
+                db=db,
+                question=question,
+                content=full_content,
+                user_content=content,
+                experience_ids=experience_ids,
+            )
+
+            # 8. 완료 이벤트 전송
+            done_data = json.dumps({
+                "type": "done",
+                "chat_id": str(ai_chat.id),
+                "is_draft": is_draft
+            }, ensure_ascii=False)
+            yield f"data: {done_data}\n\n"
+
+        elif chunk_data["type"] == "error":
+            yield f"data: {chunk_json}\n\n"
+
+
+async def get_chat_history_by_question(
+    db: AsyncSession,
+    question_id: UUID
+) -> list[Chat]:
+    """Question의 채팅 히스토리 조회"""
+    stmt = select(Chat).where(Chat.question_id == question_id).order_by(Chat.created_at)
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
 
 
 async def get_chat_history_response(
