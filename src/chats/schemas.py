@@ -141,26 +141,6 @@ class ChatHistoryResponse(BaseModel):
     }
 
 
-class UpdateAnswerRequest(BaseModel):
-    """자기소개서 답변 업데이트 요청"""
-
-    chat_id: UUID = Field(
-        ...,
-        description="업데이트할 AI 답변의 채팅 ID",
-        examples=["1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed"]
-    )
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "chat_id": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed"
-                }
-            ]
-        }
-    }
-
-
 class UpdateAnswerResponse(BaseModel):
     """자기소개서 답변 업데이트 응답"""
 
