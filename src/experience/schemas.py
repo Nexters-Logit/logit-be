@@ -3,7 +3,7 @@
 import datetime as dt
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.experience.models import ExperienceCategory, ExperienceType
 
@@ -20,8 +20,8 @@ class ExperienceCreate(BaseModel):
     result: str = Field(..., min_length=1, description="결과 (STAR의 R)")
     category: ExperienceCategory = Field(..., description="카테고리")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "title": "AI 챗봇 서비스 개발",
                 "date": "2024-06-15",
@@ -33,6 +33,7 @@ class ExperienceCreate(BaseModel):
                 "category": "기술적 전문성",
             }
         }
+    )
 
 
 class ExperienceUpdate(BaseModel):
@@ -47,13 +48,14 @@ class ExperienceUpdate(BaseModel):
     result: str | None = Field(None, min_length=1, description="결과 (STAR의 R)")
     category: ExperienceCategory | None = Field(None, description="카테고리")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "title": "AI 챗봇 서비스 개발 및 배포",
                 "result": "응답 시간을 70% 단축하고 고객 만족도를 85%로 향상시켰으며, 월 활성 사용자 1000명을 달성했습니다.",
             }
         }
+    )
 
 
 class ExperienceRead(BaseModel):
@@ -73,8 +75,8 @@ class ExperienceRead(BaseModel):
     created_at: datetime = Field(..., description="생성 시간")
     updated_at: datetime = Field(..., description="수정 시간")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "id": "123e4567-e89b-12d3-a456-426614174000",
                 "user_id": "987fcdeb-51a2-43d7-9876-543210fedcba",
@@ -91,6 +93,7 @@ class ExperienceRead(BaseModel):
                 "updated_at": "2024-06-15T10:00:00Z",
             }
         }
+    )
 
 
 class ExperienceListResponse(BaseModel):
@@ -101,8 +104,8 @@ class ExperienceListResponse(BaseModel):
     limit: int = Field(..., description="페이지당 항목 수")
     offset: int = Field(..., description="오프셋")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "experiences": [
                     {
@@ -126,6 +129,7 @@ class ExperienceListResponse(BaseModel):
                 "offset": 0,
             }
         }
+    )
 
 
 class ExperienceSearchResponse(BaseModel):
@@ -134,8 +138,8 @@ class ExperienceSearchResponse(BaseModel):
     experience: ExperienceRead = Field(..., description="경험 데이터")
     score: float = Field(..., description="유사도 점수 (0~1, 높을수록 관련성 높음)")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "experience": {
                     "id": "123e4567-e89b-12d3-a456-426614174000",
@@ -155,6 +159,7 @@ class ExperienceSearchResponse(BaseModel):
                 "score": 0.92,
             }
         }
+    )
 
 
 class ExperienceSearchResult(BaseModel):
@@ -164,8 +169,8 @@ class ExperienceSearchResult(BaseModel):
     query: str = Field(..., description="검색 쿼리")
     total: int = Field(..., description="검색 결과 개수")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "results": [
                     {
@@ -191,3 +196,4 @@ class ExperienceSearchResult(BaseModel):
                 "total": 1,
             }
         }
+    )

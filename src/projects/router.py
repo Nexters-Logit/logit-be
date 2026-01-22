@@ -1,3 +1,5 @@
+"""프로젝트 API 엔드포인트"""
+
 from typing import List
 from uuid import UUID
 
@@ -17,7 +19,7 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
     responses=RESPONSES_CREATE_WITH_AUTH,
     summary="프로젝트 생성",
-    description="새로운 프로젝트를 생성합니다. 프로젝트는 경험을 그룹화하는 컨테이너 역할을 합니다.",
+    description="새로운 프로젝트를 생성합니다. 프로젝트 생성 시 문항도 함께 추가할 수 있습니다.",
 )
 async def create_project(
     project_in: ProjectCreate,
@@ -25,10 +27,13 @@ async def create_project(
     current_user: ActiveUser,
 ):
     """
-    Create a new project.
+    새로운 프로젝트를 생성합니다.
 
-    - **name**: 프로젝트 이름
-    - **description**: 프로젝트에 대한 설명 (선택 사항)
+    - **company**: 기업명
+    - **job_position**: 직무
+    - **recruit_notice**: 채용 공고 내용
+    - **due_date**: 마감일 (선택)
+    - **questions**: 문항 목록 (선택)
     """
     return await service.create_project(
         session=session, project_create=project_in, user_id=current_user.id
@@ -49,10 +54,10 @@ async def read_projects(
     limit: int = Query(100, ge=1, le=200, description="페이지당 최대 항목 수"),
 ):
     """
-    Get a list of all projects for the current user.
+    현재 사용자의 프로젝트 목록을 조회합니다.
 
-    - **skip**: Number of projects to skip (for pagination)
-    - **limit**: Maximum number of projects to return (for pagination)
+    - **skip**: 건너뛸 항목 수 (페이지네이션)
+    - **limit**: 최대 반환 항목 수 (페이지네이션)
     """
     return await service.get_projects(
         session=session, user_id=current_user.id, skip=skip, limit=limit
@@ -72,16 +77,18 @@ async def read_project(
     current_user: ActiveUser,
 ):
     """
-    Get a single project by its ID.
+    특정 프로젝트의 상세 정보를 조회합니다.
 
-    - **project_id**: The UUID of the project to retrieve.
+    - **project_id**: 조회할 프로젝트의 UUID
+    - 프로젝트를 찾을 수 없거나 소유권이 없는 경우 404 에러를 반환합니다.
     """
     project = await service.get_project(
         session=session, project_id=project_id, user_id=current_user.id
     )
     if not project:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found.",
         )
     return project
 
@@ -91,7 +98,7 @@ async def read_project(
     response_model=ProjectRead,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="프로젝트 수정",
-    description="기존 프로젝트의 이름 또는 설명을 수정합니다. 부분 업데이트를 지원합니다.",
+    description="기존 프로젝트의 정보를 수정합니다. 부분 업데이트를 지원합니다.",
 )
 async def update_project(
     project_id: UUID,
@@ -100,17 +107,18 @@ async def update_project(
     current_user: ActiveUser,
 ):
     """
-    Update an existing project.
+    기존 프로젝트의 정보를 수정합니다.
 
-    - **project_id**: The UUID of the project to update.
-    - **project_in**: The fields to update.
+    - **project_id**: 수정할 프로젝트의 UUID
+    - **project_in**: 수정할 필드 (부분 업데이트 지원)
     """
     project = await service.get_project(
         session=session, project_id=project_id, user_id=current_user.id
     )
     if not project:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found.",
         )
     return await service.update_project(
         session=session, db_project=project, project_update=project_in
@@ -122,7 +130,7 @@ async def update_project(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="프로젝트 삭제",
-    description="프로젝트를 삭제합니다. 이 작업은 soft delete로 처리됩니다 (is_deleted 플래그 설정).",
+    description="프로젝트를 삭제합니다. 이 작업은 soft delete로 처리됩니다.",
 )
 async def delete_project(
     project_id: UUID,
@@ -130,16 +138,18 @@ async def delete_project(
     current_user: ActiveUser,
 ):
     """
-    "Delete" a project by setting its is_deleted flag to True (soft delete).
+    프로젝트를 삭제합니다.
 
-    - **project_id**: The UUID of the project to delete.
+    - **project_id**: 삭제할 프로젝트의 UUID
+    - soft delete 방식으로 처리됩니다.
     """
     project = await service.get_project(
         session=session, project_id=project_id, user_id=current_user.id
     )
     if not project:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found.",
         )
     await service.delete_project(session=session, db_project=project)
-    return None  # Return None for 204 No Content
+    return None
