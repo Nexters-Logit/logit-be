@@ -1,3 +1,5 @@
+"""문항 API 엔드포인트"""
+
 from typing import List
 from uuid import UUID
 
@@ -21,7 +23,7 @@ router = APIRouter()
     response_model=QuestionListItem,
     status_code=status.HTTP_201_CREATED,
     responses=RESPONSES_CREATE_WITH_AUTH,
-    summary="자기소개서 문항 생성",
+    summary="문항 생성",
     description="특정 프로젝트에 새로운 자기소개서 문항을 생성합니다.",
 )
 async def create_question(
@@ -31,10 +33,10 @@ async def create_question(
     current_user: ActiveUser,
 ):
     """
-    Create a new question for a specific project.
+    새로운 문항을 생성합니다.
 
-    - **project_id**: The ID of the project this question belongs to.
-    - **question_in**: The content of the question.
+    - **project_id**: 문항이 속할 프로젝트의 UUID
+    - **question_in**: 문항 내용
     """
     return await service.create_question(
         session=session,
@@ -48,7 +50,7 @@ async def create_question(
     "/",
     response_model=List[QuestionListItem],
     responses=RESPONSES_CRUD_WITH_AUTH,
-    summary="프로젝트의 문항 목록 조회",
+    summary="문항 목록 조회",
     description="특정 프로젝트에 속한 모든 자기소개서 문항 목록을 조회합니다.",
 )
 async def read_questions(
@@ -57,9 +59,9 @@ async def read_questions(
     current_user: ActiveUser,
 ):
     """
-    Get all questions for a specific project.
+    프로젝트의 문항 목록을 조회합니다.
 
-    - **project_id**: The ID of the project.
+    - **project_id**: 문항을 조회할 프로젝트의 UUID
     """
     return await service.get_questions(
         session=session, project_id=project_id, user_id=current_user.id
@@ -80,10 +82,10 @@ async def read_question(
     current_user: ActiveUser,
 ):
     """
-    Get a single question by its ID, ensuring it belongs to the specified project.
+    특정 문항의 상세 정보를 조회합니다.
 
-    - **project_id**: The ID of the project.
-    - **question_id**: The ID of the question to retrieve.
+    - **project_id**: 프로젝트의 UUID
+    - **question_id**: 조회할 문항의 UUID
     """
     question = await service.get_question(
         session=session,
@@ -93,7 +95,8 @@ async def read_question(
     )
     if not question:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Question not found"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found.",
         )
     return question
 
@@ -113,11 +116,11 @@ async def update_question(
     current_user: ActiveUser,
 ):
     """
-    Update an existing question.
+    기존 문항의 내용을 수정합니다.
 
-    - **project_id**: The ID of the project.
-    - **question_id**: The ID of the question to update.
-    - **question_in**: The fields to update.
+    - **project_id**: 프로젝트의 UUID
+    - **question_id**: 수정할 문항의 UUID
+    - **question_in**: 수정할 필드 (부분 업데이트 지원)
     """
     question = await service.get_question(
         session=session,
@@ -127,7 +130,8 @@ async def update_question(
     )
     if not question:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Question not found"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found.",
         )
     return await service.update_question(
         session=session, db_question=question, question_update=question_in
@@ -139,7 +143,7 @@ async def update_question(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="문항 삭제",
-    description="자기소개서 문항을 삭제합니다 (Soft Delete).",
+    description="자기소개서 문항을 삭제합니다. 이 작업은 soft delete로 처리됩니다.",
 )
 async def delete_question(
     project_id: UUID,
@@ -148,10 +152,11 @@ async def delete_question(
     current_user: ActiveUser,
 ):
     """
-    "Delete" a question by setting its is_deleted flag to True (soft delete).
+    문항을 삭제합니다.
 
-    - **project_id**: The ID of the project.
-    - **question_id**: The ID of the question to delete.
+    - **project_id**: 프로젝트의 UUID
+    - **question_id**: 삭제할 문항의 UUID
+    - soft delete 방식으로 처리됩니다.
     """
     question = await service.get_question(
         session=session,
@@ -161,7 +166,8 @@ async def delete_question(
     )
     if not question:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Question not found"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found.",
         )
     await service.delete_question(session=session, db_question=question)
     return None

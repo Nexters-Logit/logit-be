@@ -36,7 +36,8 @@ class User(SQLModel, table=True):
         default=None, sa_column=Column(DateTime(timezone=True))
     )
 
-    # Refresh token for JWT
+    # JWT tokens
+    access_token: str | None = Field(default=None)
     refresh_token: str | None = Field(default=None)
 
     # Timestamps

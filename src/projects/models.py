@@ -14,10 +14,9 @@ class Project(SQLModel, table=True):
     user_id: UUID = Field(foreign_key="users.id", index=True)
 
     company: str = Field(max_length=255, description="회사명")
-    employment_type: str | None = Field(default=None, max_length=100, description="고용형태 (정규직, 계약직 등)")
-    recruit_notice: str | None = Field(
-        default=None,
-        sa_column=Column(Text, nullable=True),
+    job_position: str = Field(max_length=100, description="직무 (백엔드 개발자, 프론트엔드 개발자 등)")
+    recruit_notice: str = Field(
+        sa_column=Column(Text, nullable=False),
         description="채용공고 전체 내용",
     )
     due_date: date | None = Field(
