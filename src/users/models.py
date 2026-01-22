@@ -37,7 +37,6 @@ class User(SQLModel, table=True):
     )
 
     # JWT tokens
-    access_token: str | None = Field(default=None)
     refresh_token: str | None = Field(default=None)
 
     # Timestamps

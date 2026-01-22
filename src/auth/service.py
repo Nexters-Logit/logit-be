@@ -69,7 +69,6 @@ async def google_oauth_flow(code: str, session: AsyncSession) -> OAuthCallbackRe
         await user_service.update_tokens(
             session=session,
             db_user=existing_user,
-            access_token=access_token_jwt,
             refresh_token=refresh_token_jwt,
         )
 
@@ -96,11 +95,8 @@ async def google_oauth_flow(code: str, session: AsyncSession) -> OAuthCallbackRe
     refresh_token_jwt = create_refresh_token(subject=str(new_user.id))
 
     # Store tokens
-    await user_service.update_tokens(
-        session=session,
-        db_user=new_user,
-        access_token=access_token_jwt,
-        refresh_token=refresh_token_jwt,
+    await user_service.update_refresh_token(
+        session=session, db_user=new_user, refresh_token=refresh_token_jwt
     )
 
     return OAuthCallbackResponse(
