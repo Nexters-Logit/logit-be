@@ -24,7 +24,7 @@ def upgrade() -> None:
     sa.Column('email', sqlmodel.sql.sqltypes.AutoString(length=255), nullable=False),
     sa.Column('full_name', sqlmodel.sql.sqltypes.AutoString(length=255), nullable=True),
     sa.Column('is_active', sa.Boolean(), nullable=False),
-    sa.Column('oauth_provider', sa.Enum('GOOGLE', 'APPLE', name='oauthprovider'), nullable=True),
+    sa.Column('oauth_provider', sa.Enum('google', 'apple', name='oauthprovider'), nullable=True),
     sa.Column('oauth_provider_id', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
     sa.Column('profile_image_url', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
     sa.Column('terms_agreed', sa.Boolean(), nullable=False),
