@@ -138,11 +138,8 @@ async def refresh_access_token(request: schemas.RefreshTokenRequest, session: Se
     new_access_token = create_access_token(subject=str(user.id))
     new_refresh_token = create_refresh_token(subject=str(user.id))
 
-    await user_service.update_tokens(
-        session=session,
-        db_user=user,
-        access_token=new_access_token,
-        refresh_token=new_refresh_token,
+    await user_service.update_refresh_token(
+        session=session, db_user=user, refresh_token=new_refresh_token
     )
 
     return schemas.Token(
@@ -176,6 +173,6 @@ async def logout(request: schemas.LogoutRequest, session: SessionDep):
     user = await user_service.get_user_by_id(session=session, user_id=UUID(user_id))
 
     if user:
-        await user_service.clear_tokens(session=session, db_user=user)
+        user_service.update_refresh_token(session=session, db_user=user, refresh_token="")
 
     return None

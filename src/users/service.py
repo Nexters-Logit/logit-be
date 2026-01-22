@@ -37,10 +37,9 @@ async def update_user(*, session: AsyncSession, db_user: User, user_in: UserUpda
 
 
 async def update_tokens(
-    *, session: AsyncSession, db_user: User, access_token: str, refresh_token: str
+    *, session: AsyncSession, db_user: User, refresh_token: str
 ) -> User:
     """Update user's access and refresh tokens."""
-    db_user.access_token = access_token
     db_user.refresh_token = refresh_token
     session.add(db_user)
     await session.commit()
@@ -50,7 +49,6 @@ async def update_tokens(
 
 async def clear_tokens(*, session: AsyncSession, db_user: User) -> User:
     """Clear user's tokens on logout."""
-    db_user.access_token = None
     db_user.refresh_token = None
     session.add(db_user)
     await session.commit()

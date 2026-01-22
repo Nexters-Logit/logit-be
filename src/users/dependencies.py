@@ -57,14 +57,6 @@ async def get_current_user(
             detail="Inactive user",
         )
 
-    # Check if token matches stored access token (invalidated tokens won't match)
-    if user.access_token != token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has been invalidated",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
     return user
 
 
