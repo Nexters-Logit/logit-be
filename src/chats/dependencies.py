@@ -1,10 +1,14 @@
 """Chat 도메인 의존성 주입 모듈"""
 
+from __future__ import annotations
+
 from functools import lru_cache
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends
-from langchain_openai import ChatOpenAI
+
+if TYPE_CHECKING:
+    from langchain_openai import ChatOpenAI
 
 from src.config import settings
 
@@ -16,12 +20,12 @@ class LLMProvider:
         self._streaming_llm: ChatOpenAI | None = None
         self._classification_llm: ChatOpenAI | None = None
 
-    `@property`
+    @property
     def streaming_llm(self) -> ChatOpenAI:
         """스트리밍용 LLM (lazy initialization)"""
+        from langchain_openai import ChatOpenAI
+
         if self._streaming_llm is None:
-            if not settings.OPENAI_API_KEY:
-                raise ValueError("OPENAI_API_KEY must be set in .env")
             self._streaming_llm = ChatOpenAI(
                 model=settings.OPENAI_MODEL,
                 api_key=settings.OPENAI_API_KEY,
@@ -33,6 +37,8 @@ class LLMProvider:
     @property
     def classification_llm(self) -> ChatOpenAI:
         """분류용 LLM (비스트리밍, 낮은 temperature)"""
+        from langchain_openai import ChatOpenAI
+
         if self._classification_llm is None:
             self._classification_llm = ChatOpenAI(
                 model=settings.OPENAI_MODEL,
