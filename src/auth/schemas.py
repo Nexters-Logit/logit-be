@@ -10,7 +10,7 @@ class OAuthUserCreate(BaseModel):
 
     email: str = Field(..., description="사용자 이메일")
     full_name: str | None = Field(None, description="사용자 이름")
-    oauth_provider: OAuthProvider = Field(..., description="OAuth 제공자 (KAKAO, GOOGLE, APPLE)")
+    oauth_provider: OAuthProvider = Field(..., description="OAuth 제공자 (google, apple)")
     oauth_provider_id: str = Field(..., description="OAuth 제공자 ID")
     profile_image_url: str | None = Field(None, description="프로필 이미지 URL")
 
@@ -19,7 +19,7 @@ class OAuthUserCreate(BaseModel):
             "example": {
                 "email": "user@example.com",
                 "full_name": "홍길동",
-                "oauth_provider": "KAKAO",
+                "oauth_provider": "google",
                 "oauth_provider_id": "1234567890",
                 "profile_image_url": "https://example.com/profile.jpg",
             }

@@ -25,7 +25,7 @@ async def create_user_chat(
         question_id=question.id,
         project_id=question.project_id,
         user_id=question.user_id,
-        role=ChatRole.USER,
+        role=ChatRole.user,
         content=content,
         experience_ids=experience_ids
     )
@@ -53,7 +53,7 @@ async def create_assistant_chat(
         question_id=question.id,
         project_id=question.project_id,
         user_id=question.user_id,
-        role=ChatRole.AI,
+        role=ChatRole.ai,
         content=content,
         experience_ids=experience_ids,
         is_draft=is_draft
@@ -214,7 +214,7 @@ async def get_chat_history_response(
             break
 
     # 5. project_name 생성: "company_job"
-    project_name = f"{project.company}_{project.employment_type}"  # todo: 이후에 job으로 수정
+    project_name = f"{project.company}_{project.job_position}"
 
     # 6. created_at 포맷: "2026.01.20"
     created_at_str = project.created_at.strftime("%Y.%m.%d")
@@ -251,7 +251,7 @@ async def update_question_answer(
     chat_result = await db.execute(chat_stmt)
     chat = chat_result.scalar_one_or_none()
 
-    if chat.role != ChatRole.AI or not chat.is_draft:
+    if chat.role != ChatRole.ai or not chat.is_draft:
         return None
 
     # 2. Question 조회 및 answer 업데이트

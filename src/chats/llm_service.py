@@ -40,7 +40,7 @@ def _format_chat_history(chats: list[Chat]) -> list:
     """채팅 히스토리를 Langchain 메시지 형식으로 변환"""
     messages = []
     for chat in chats:
-        if chat.role == ChatRole.USER:
+        if chat.role == ChatRole.user:
             messages.append(HumanMessage(content=chat.content))
         else:
             messages.append(AIMessage(content=chat.content))

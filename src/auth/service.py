@@ -58,7 +58,7 @@ async def google_oauth_flow(code: str, session: AsyncSession) -> OAuthCallbackRe
 
     # Check if user exists
     existing_user = await user_service.get_user_by_oauth(
-        session=session, provider=OAuthProvider.GOOGLE, provider_id=google_id
+        session=session, provider=OAuthProvider.google, provider_id=google_id
     )
 
     # Existing user - return JWT tokens
@@ -84,7 +84,7 @@ async def google_oauth_flow(code: str, session: AsyncSession) -> OAuthCallbackRe
         oauth_user=OAuthUserCreate(
             email=email,
             full_name=user_data.get("name"),
-            oauth_provider=OAuthProvider.GOOGLE,
+            oauth_provider=OAuthProvider.google,
             oauth_provider_id=google_id,
             profile_image_url=user_data.get("picture"),
         ),

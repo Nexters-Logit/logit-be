@@ -11,8 +11,8 @@ from sqlmodel import Field, SQLModel
 class OAuthProvider(str, Enum):
     """OAuth provider types."""
 
-    GOOGLE = "google"
-    APPLE = "apple"
+    google = "google"
+    apple = "apple"
 
 
 class User(SQLModel, table=True):

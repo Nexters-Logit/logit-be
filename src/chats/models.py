@@ -10,8 +10,8 @@ from sqlmodel import Field, SQLModel
 class ChatRole(str, Enum):
     """Chat role types."""
 
-    USER = "user"
-    AI = "ai"
+    user = "user"
+    ai = "ai"
 
 
 class Chat(SQLModel, table=True):
