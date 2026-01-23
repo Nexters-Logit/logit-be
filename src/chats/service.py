@@ -205,8 +205,12 @@ async def get_chat_history_response(
             cursor_created_at = cursor_result.scalar_one_or_none()
 
             if cursor_created_at:
-                messages_stmt = messages_stmt.where(Chat.created_at < cursor_created_at)
-
+                # 동일 타임스탬프의 메시지 누락 방지
+                messages_stmt = messages_stmt.where(
+                (Chat.created_at < cursor_created_at) |
+                ((Chat.created_at == cursor_created_at) & (Chat.id < cursor_uuid))
+                )
+                
     # size + 1로 조회해서 has_more 판단
     messages_stmt = messages_stmt.order_by(Chat.created_at.desc()).limit(size + 1)
 
