@@ -162,9 +162,11 @@ async def get_chat_history_by_question(
 async def get_chat_history_response(
     db: AsyncSession,
     question_id: UUID,
-    user_id: UUID
+    user_id: UUID,
+    cursor: str | None = None,
+    size: int = 20
 ) -> ChatHistoryResponse | None:
-    """채팅 히스토리 조회"""
+    """채팅 히스토리 조회 (Cursor 기반 페이지네이션)"""
 
     # 1. Question 조회
     question_stmt = select(Question).where(Question.id == question_id)
@@ -173,7 +175,7 @@ async def get_chat_history_response(
 
     if not question or question.user_id != user_id:
         return None
-    
+
     # 2. Project 조회
     project_stmt = select(Project).where(Project.id == question.project_id)
     project_result = await db.execute(project_stmt)
@@ -182,13 +184,37 @@ async def get_chat_history_response(
     if not project:
         return None
 
-    # 3. ChatMessage 조회 (시간순 정렬)
-    messages_stmt = select(Chat)\
-        .where(Chat.question_id == question_id)\
-        .order_by(Chat.created_at)
+    # 3. ChatMessage 조회 (Cursor 기반 페이지네이션)
+    # 최신 메시지부터 역순으로 조회 (채팅 UI 특성상)
+    messages_stmt = select(Chat).where(Chat.question_id == question_id)
+
+    if cursor:
+        # cursor 이전의 메시지 조회 (cursor는 마지막으로 본 메시지 ID)
+        cursor_chat_stmt = select(Chat.created_at).where(Chat.id == UUID(cursor))
+        cursor_result = await db.execute(cursor_chat_stmt)
+        cursor_created_at = cursor_result.scalar_one_or_none()
+
+        if cursor_created_at:
+            messages_stmt = messages_stmt.where(Chat.created_at < cursor_created_at)
+
+    # size + 1로 조회해서 has_more 판단
+    messages_stmt = messages_stmt.order_by(Chat.created_at.desc()).limit(size + 1)
 
     messages_result = await db.execute(messages_stmt)
-    messages = messages_result.scalars().all()
+    messages = list(messages_result.scalars().all())
+
+    # has_more 판단 및 실제 반환할 메시지 제한
+    has_more = len(messages) > size
+    if has_more:
+        messages = messages[:size]
+
+    # 시간순 정렬 (역순으로 조회했으니 다시 정렬)
+    messages = list(reversed(messages))
+
+    # next_cursor 설정 (마지막 메시지의 ID)
+    next_cursor = None
+    if has_more and messages:
+        next_cursor = str(messages[0].id)  # 가장 오래된 메시지 ID (역순이므로 첫 번째)
 
     # 4. 가장 최근 experience_ids 조회 (역순으로 찾기)
     latest_experience_ids = []
@@ -219,7 +245,9 @@ async def get_chat_history_response(
             )
             for msg in messages
         ],
-        experience_ids=latest_experience_ids
+        experience_ids=latest_experience_ids,
+        next_cursor=next_cursor,
+        has_more=has_more
     )
 
 

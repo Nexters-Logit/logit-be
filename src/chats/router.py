@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from .schemas import ChatRequest, ChatHistoryResponse, UpdateAnswerResponse
@@ -50,11 +50,23 @@ async def send_chat(
 async def get_chat_messages(
     question_id: UUID,
     session: SessionDep,
-    current_user: ActiveUser
+    current_user: ActiveUser,
+    cursor: str | None = Query(
+        default=None,
+        description="다음 페이지 조회용 cursor (이전 응답의 next_cursor 값)"
+    ),
+    size: int = Query(
+        default=20,
+        ge=1,
+        le=100,
+        description="한 페이지에 가져올 메시지 수 (기본값: 20, 최대: 100)"
+    ),
 ):
     """채팅 히스토리 조회 API"""
 
-    response = await get_chat_history_response(session, question_id, current_user.id)
+    response = await get_chat_history_response(
+        session, question_id, current_user.id, cursor=cursor, size=size
+    )
 
     if not response:
         raise HTTPException(404, "Question not found")

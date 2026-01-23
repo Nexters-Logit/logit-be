@@ -5,6 +5,29 @@ GET_CHAT_HISTORY_SWAGGER = {
     "description": """
 특정 문항(Question)에 대한 채팅 히스토리를 조회합니다.
 
+## 페이지네이션
+
+Cursor 기반 페이지네이션을 지원합니다.
+
+**쿼리 파라미터:**
+- `cursor`: 다음 페이지 조회용 (이전 응답의 `next_cursor` 값)
+- `size`: 한 페이지에 가져올 메시지 수 (기본값: 20, 최대: 100)
+
+**응답 페이지네이션 필드:**
+- `next_cursor`: 다음 페이지 조회용 cursor (없으면 마지막 페이지)
+- `has_more`: 더 많은 데이터가 있는지 여부
+
+**사용 예시:**
+```
+# 첫 페이지
+GET /projects/chats/{question_id}?size=20
+
+# 다음 페이지 (이전 응답의 next_cursor 사용)
+GET /projects/chats/{question_id}?cursor=1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed&size=20
+```
+
+---
+
 **반환 정보:**
 - 프로젝트명 (회사_채용유형)
 - 생성일
@@ -22,6 +45,61 @@ GET_CHAT_HISTORY_SWAGGER = {
     "responses": {
         status.HTTP_200_OK: {
             "description": "채팅 히스토리 조회 성공",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "with_more_pages": {
+                            "summary": "더 많은 페이지가 있는 경우",
+                            "value": {
+                                "project_name": "네이버_백엔드개발자",
+                                "created_at": "2026.01.20",
+                                "question_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                                "question": "지원동기 및 향후 목표",
+                                "chats": [
+                                    {
+                                        "id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+                                        "role": "user",
+                                        "content": "협업 경험 써줘",
+                                        "is_draft": False,
+                                        "created_at": "2026-01-20T10:00:00Z"
+                                    },
+                                    {
+                                        "id": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
+                                        "role": "ai",
+                                        "content": "Cardify 프로젝트에서...",
+                                        "is_draft": True,
+                                        "created_at": "2026-01-20T10:00:05Z"
+                                    }
+                                ],
+                                "experience_ids": ["7c9e6679-7425-40de-944b-e07fc1f90ae7"],
+                                "next_cursor": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+                                "has_more": True
+                            }
+                        },
+                        "last_page": {
+                            "summary": "마지막 페이지",
+                            "value": {
+                                "project_name": "네이버_백엔드개발자",
+                                "created_at": "2026.01.20",
+                                "question_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                                "question": "지원동기 및 향후 목표",
+                                "chats": [
+                                    {
+                                        "id": "abc12345-1234-5678-9abc-def012345678",
+                                        "role": "user",
+                                        "content": "첫 번째 메시지",
+                                        "is_draft": False,
+                                        "created_at": "2026-01-20T09:00:00Z"
+                                    }
+                                ],
+                                "experience_ids": [],
+                                "next_cursor": None,
+                                "has_more": False
+                            }
+                        }
+                    }
+                }
+            },
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "문항을 찾을 수 없음",
