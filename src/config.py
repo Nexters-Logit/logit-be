@@ -114,6 +114,8 @@ class Settings(BaseSettings):
 
     # OpenAI (for Langchain)
     OPENAI_API_KEY: str | None = None
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_TEMPERATURE: float = 0.7
 
     @model_validator(mode="after")
     def _enforce_non_default_secrets(self) -> Self:

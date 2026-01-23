@@ -2,35 +2,17 @@ import json
 from typing import AsyncGenerator
 from uuid import UUID
 
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.config import settings
 from src.experience.models import Experience
 from src.experience.service import get_experience
 from .prompts import COVER_LETTER_SYSTEM_PROMPT
 from .chat_history import PostgresChatMessageHistory
-
-
-# LLM 초기화 (스트리밍용)
-llm = ChatOpenAI(
-    model="gpt-4o-mini",
-    api_key=settings.OPENAI_API_KEY,
-    streaming=True,
-    temperature=0.7,
-)
-
-# LLM 초기화 (Function Calling용, 비스트리밍)
-llm_for_classification = ChatOpenAI(
-    model="gpt-4o-mini",
-    api_key=settings.OPENAI_API_KEY,
-    streaming=False,
-    temperature=0,
-)
+from .dependencies import LLMProvider, get_llm_provider
 
 
 # Function Calling 스키마 정의
@@ -44,10 +26,14 @@ class DraftClassification(BaseModel):
     )
 
 
-async def classify_draft_intent(user_message: str) -> bool:
+async def classify_draft_intent(
+    user_message: str,
+    llm_provider: LLMProvider | None = None
+) -> bool:
     """Function Calling으로 초안 작성 의도 판단"""
 
-    llm_with_structured = llm_for_classification.with_structured_output(DraftClassification)
+    provider = llm_provider or get_llm_provider()
+    llm_with_structured = provider.classification_llm.with_structured_output(DraftClassification)
 
     result = await llm_with_structured.ainvoke(
         f"다음 사용자 메시지가 자기소개서 초안 작성 요청인지 판단하세요:\n\n{user_message}"
@@ -68,8 +54,6 @@ def _format_experience(exp: Experience) -> str:
 - 카테고리: {exp.category}
 - 태그: {exp.tags}
 """
-
-
 
 def get_experiences_by_ids(
     qdrant_client: QdrantClient,
@@ -100,6 +84,7 @@ async def generate_ai_response_stream(
     experience_ids: list[str] | None,
     qdrant_client: QdrantClient,
     user_id: str,
+    llm_provider: LLMProvider | None = None,
 ) -> AsyncGenerator[str, None]:
     """
     RAG 기반 AI 응답 스트리밍 생성 (RunnableWithMessageHistory 사용)
@@ -111,6 +96,9 @@ async def generate_ai_response_stream(
         - {"type": "error", "message": "..."} - 에러 시
     """
     try:
+        # 0. LLM Provider 초기화
+        provider = llm_provider or get_llm_provider()
+
         # 1. 경험 정보 조회
         experiences_text = "선택된 경험이 없습니다."
         if experience_ids:
@@ -130,7 +118,7 @@ async def generate_ai_response_stream(
         ])
 
         # 3. 체인 구성
-        chain = prompt | llm
+        chain = prompt | provider.streaming_llm
 
         # 4. PostgresChatMessageHistory 인스턴스 생성 및 히스토리 로드
         chat_history_instance = PostgresChatMessageHistory(db=db, question_id=question_id)

@@ -190,12 +190,19 @@ async def get_chat_history_response(
 
     if cursor:
         # cursor 이전의 메시지 조회 (cursor는 마지막으로 본 메시지 ID)
-        cursor_chat_stmt = select(Chat.created_at).where(Chat.id == UUID(cursor))
-        cursor_result = await db.execute(cursor_chat_stmt)
-        cursor_created_at = cursor_result.scalar_one_or_none()
+        try:
+            cursor_uuid = UUID(cursor)
+        except ValueError:
+            # 잘못된 cursor 형식이면 무시하고 첫 페이지 반환
+            cursor_uuid = None
 
-        if cursor_created_at:
-            messages_stmt = messages_stmt.where(Chat.created_at < cursor_created_at)
+        if cursor_uuid:
+            cursor_chat_stmt = select(Chat.created_at).where(Chat.id == cursor_uuid)
+            cursor_result = await db.execute(cursor_chat_stmt)
+            cursor_created_at = cursor_result.scalar_one_or_none()
+
+            if cursor_created_at:
+                messages_stmt = messages_stmt.where(Chat.created_at < cursor_created_at)
 
     # size + 1로 조회해서 has_more 판단
     messages_stmt = messages_stmt.order_by(Chat.created_at.desc()).limit(size + 1)
@@ -263,7 +270,7 @@ async def update_question_answer(
     chat_result = await db.execute(chat_stmt)
     chat = chat_result.scalar_one_or_none()
 
-    if chat.role != ChatRole.ai or not chat.is_draft:
+    if not chat or chat.role != ChatRole.ai or not chat.is_draft:
         return None
 
     # 2. Question 조회 및 answer 업데이트
