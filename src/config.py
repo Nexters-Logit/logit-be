@@ -64,9 +64,13 @@ class Settings(BaseSettings):
     @computed_field
     @property
     def all_cors_origins(self) -> list[str]:
-        return [str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS] + [
+        origins = [str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS] + [
             self.FRONTEND_HOST
         ]
+        # dev 환경에서는 localhost:3000도 허용 (프론트 로컬 개발용)
+        if self.ENVIRONMENT == "dev" and "http://localhost:3000" not in origins:
+            origins.append("http://localhost:3000")
+        return origins
 
     # Database - PostgreSQL
     POSTGRES_SERVER: str
