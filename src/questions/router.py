@@ -24,7 +24,6 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
     responses=RESPONSES_CREATE_WITH_AUTH,
     summary="문항 생성",
-    description="특정 프로젝트에 새로운 자기소개서 문항을 생성합니다.",
 )
 async def create_question(
     project_id: UUID,
@@ -51,7 +50,6 @@ async def create_question(
     response_model=List[QuestionListItem],
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="문항 목록 조회",
-    description="특정 프로젝트에 속한 모든 자기소개서 문항 목록을 조회합니다.",
 )
 async def read_questions(
     project_id: UUID,
@@ -73,7 +71,6 @@ async def read_questions(
     response_model=QuestionRead,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="문항 상세 조회",
-    description="특정 자기소개서 문항의 상세 정보를 조회합니다.",
 )
 async def read_question(
     project_id: UUID,
@@ -106,7 +103,6 @@ async def read_question(
     response_model=QuestionRead,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="문항 수정",
-    description="기존 자기소개서 문항의 내용을 수정합니다.",
 )
 async def update_question(
     project_id: UUID,
@@ -143,7 +139,6 @@ async def update_question(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="문항 삭제",
-    description="자기소개서 문항을 삭제합니다. 이 작업은 soft delete로 처리됩니다.",
 )
 async def delete_question(
     project_id: UUID,

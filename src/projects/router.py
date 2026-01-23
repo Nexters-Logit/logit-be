@@ -19,7 +19,6 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
     responses=RESPONSES_CREATE_WITH_AUTH,
     summary="프로젝트 생성",
-    description="새로운 프로젝트를 생성합니다. 프로젝트 생성 시 문항도 함께 추가할 수 있습니다.",
 )
 async def create_project(
     project_in: ProjectCreate,
@@ -45,7 +44,6 @@ async def create_project(
     response_model=List[ProjectListItem],
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="프로젝트 목록 조회",
-    description="현재 사용자가 소유한 모든 프로젝트의 목록을 조회합니다. 페이지네이션을 지원합니다.",
 )
 async def read_projects(
     session: SessionDep,
@@ -69,7 +67,6 @@ async def read_projects(
     response_model=ProjectRead,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="프로젝트 상세 조회",
-    description="특정 프로젝트의 상세 정보를 ID로 조회합니다. 소유권이 없는 경우 404 에러를 반환합니다.",
 )
 async def read_project(
     project_id: UUID,
@@ -98,7 +95,6 @@ async def read_project(
     response_model=ProjectRead,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="프로젝트 수정",
-    description="기존 프로젝트의 정보를 수정합니다. 부분 업데이트를 지원합니다.",
 )
 async def update_project(
     project_id: UUID,
@@ -130,7 +126,6 @@ async def update_project(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="프로젝트 삭제",
-    description="프로젝트를 삭제합니다. 이 작업은 soft delete로 처리됩니다.",
 )
 async def delete_project(
     project_id: UUID,

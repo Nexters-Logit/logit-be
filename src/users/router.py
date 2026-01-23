@@ -16,7 +16,6 @@ router = APIRouter()
     response_model=schemas.UserPublic,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="현재 사용자 정보 조회",
-    description="인증된 현재 사용자의 프로필 정보를 조회합니다.",
 )
 async def get_current_user_info(current_user: ActiveUser):
     """
@@ -32,7 +31,6 @@ async def get_current_user_info(current_user: ActiveUser):
     response_model=schemas.UserPublic,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="현재 사용자 정보 수정",
-    description="현재 사용자의 프로필 정보(예: 닉네임)를 수정합니다.",
 )
 async def update_current_user(
     session: SessionDep,
@@ -53,7 +51,6 @@ async def update_current_user(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="현재 사용자 계정 삭제",
-    description="현재 사용자의 계정을 삭제합니다. 이 작업은 soft delete로 처리됩니다.",
 )
 async def delete_current_user(
     session: SessionDep,
@@ -73,7 +70,6 @@ async def delete_current_user(
     response_model=schemas.UserPublic,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="특정 사용자 정보 조회",
-    description="사용자 ID로 특정 사용자의 공개 프로필 정보를 조회합니다.",
 )
 async def get_user_by_id(
     session: SessionDep,

@@ -25,7 +25,6 @@ router = APIRouter()
 @router.get(
     "/google",
     summary="Google OAuth 로그인",
-    description="사용자를 Google OAuth2 인증 페이지로 리디렉션합니다. 성공 시 설정된 콜백 URL로 리디렉션됩니다.",
     responses={
         307: {"description": "Google 인증 페이지로 리디렉션"},
         501: ERROR_501_NOT_IMPLEMENTED,
@@ -58,7 +57,6 @@ async def google_login():
     "/google/callback",
     response_model=schemas.OAuthCallbackResponse,
     summary="Google OAuth 콜백 처리",
-    description="Google로부터 리디렉션된 후 인증 코드를 처리합니다. 신규 사용자인 경우 계정을 생성하고, 기존 사용자인 경우 로그인 처리 후 JWT 액세스 토큰과 리프레시 토큰을 발급합니다.",
     responses=create_responses(
         {400: ERROR_400_BAD_REQUEST},
         {501: ERROR_501_NOT_IMPLEMENTED},
@@ -92,7 +90,6 @@ async def google_callback(code: str, session: SessionDep):
     "/refresh",
     response_model=schemas.Token,
     summary="액세스 토큰 갱신",
-    description="유효한 리프레시 토큰을 사용하여 새로운 액세스 토큰과 리프레시 토큰을 발급받습니다. (Refresh Token Rotation)",
     responses=create_responses(
         {400: ERROR_400_BAD_REQUEST},
         {401: ERROR_401_UNAUTHORIZED},
@@ -152,7 +149,6 @@ async def refresh_access_token(request: schemas.RefreshTokenRequest, session: Se
     "/logout",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="로그아웃",
-    description="사용자의 액세스 토큰과 리프레시 토큰을 모두 무효화하여 로그아웃 처리합니다.",
     responses={401: ERROR_401_UNAUTHORIZED},
 )
 async def logout(request: schemas.LogoutRequest, session: SessionDep):
