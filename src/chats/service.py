@@ -96,31 +96,28 @@ async def send_chat_stream(
         yield f"data: {json.dumps({'type': 'error', 'message': 'Project not found'}, ensure_ascii=False)}\n\n"
         return
 
-    # 3. 사용자 메시지 저장
-    user_chat = await create_user_chat(
+    # 3. 초안 여부 판단 (Function Calling) - 사용자 메시지 저장 전에 먼저 판단
+    is_draft = await classify_draft_intent(content)
+
+    # 4. 사용자 메시지 저장
+    await create_user_chat(
         db=db,
         question=question,
         content=content,
         experience_ids=experience_ids,
     )
 
-    # 4. 채팅 히스토리 조회 (현재 메시지 제외)
-    chat_history = await get_chat_history_by_question(db, question_id)
-    chat_history = [c for c in chat_history if c.id != user_chat.id]
-
-    # 5. 초안 여부 판단 (Function Calling)
-    is_draft = await classify_draft_intent(content)
-
-    # 6. AI 응답 스트리밍
+    # 5. AI 응답 스트리밍 (RunnableWithMessageHistory가 DB에서 히스토리 자동 로드)
     full_content = ""
     async for chunk_json in generate_ai_response_stream(
+        db=db,
+        question_id=question_id,
         user_message=content,
         question_content=question.question,
         max_length=question.max_length,
         company=project.company,
         recruit_notice=project.recruit_notice,
         experience_ids=experience_ids,
-        chat_history=chat_history,
         qdrant_client=qdrant_client,
         user_id=str(user_id),
     ):
@@ -131,7 +128,7 @@ async def send_chat_stream(
             yield f"data: {chunk_json}\n\n"
 
         elif chunk_data["type"] == "done":
-            # 7. AI 메시지 저장
+            # 6. AI 메시지 저장
             ai_chat = await create_assistant_chat(
                 db=db,
                 question=question,
@@ -140,7 +137,7 @@ async def send_chat_stream(
                 experience_ids=experience_ids,
             )
 
-            # 8. 완료 이벤트 전송
+            # 7. 완료 이벤트 전송
             done_data = json.dumps({
                 "type": "done",
                 "chat_id": str(ai_chat.id),

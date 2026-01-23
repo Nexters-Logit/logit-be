@@ -1,17 +1,19 @@
 import json
 from typing import AsyncGenerator
+from uuid import UUID
 
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.runnables.history import RunnableWithMessageHistory
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.experience.models import Experience
 from src.experience.service import get_experience
-from .models import Chat, ChatRole
 from .prompts import COVER_LETTER_SYSTEM_PROMPT
+from .chat_history import PostgresChatMessageHistory
 
 
 # LLM 초기화 (스트리밍용)
@@ -68,17 +70,6 @@ def _format_experience(exp: Experience) -> str:
 """
 
 
-def _format_chat_history(chats: list[Chat]) -> list:
-    """채팅 히스토리를 Langchain 메시지 형식으로 변환"""
-    messages = []
-    for chat in chats:
-        if chat.role == ChatRole.USER:
-            messages.append(HumanMessage(content=chat.content))
-        else:
-            messages.append(AIMessage(content=chat.content))
-    return messages
-
-
 def get_experiences_by_ids(
     qdrant_client: QdrantClient,
     experience_ids: list[str],
@@ -98,18 +89,19 @@ def get_experiences_by_ids(
 
 async def generate_ai_response_stream(
     *,
+    db: AsyncSession,
+    question_id: UUID,
     user_message: str,
     question_content: str,
     max_length: int | None,
     company: str,
     recruit_notice: str | None,
     experience_ids: list[str] | None,
-    chat_history: list[Chat],
     qdrant_client: QdrantClient,
     user_id: str,
 ) -> AsyncGenerator[str, None]:
     """
-    RAG 기반 AI 응답 스트리밍 생성
+    RAG 기반 AI 응답 스트리밍 생성 (RunnableWithMessageHistory 사용)
 
     Yields:
         JSON 형식의 SSE 데이터
@@ -139,26 +131,37 @@ async def generate_ai_response_stream(
         # 3. 체인 구성
         chain = prompt | llm
 
-        # 4. 채팅 히스토리 변환
-        history_messages = _format_chat_history(chat_history)
+        # 4. PostgresChatMessageHistory 인스턴스 생성 및 히스토리 로드
+        chat_history_instance = PostgresChatMessageHistory(db=db, question_id=question_id)
+        await chat_history_instance.aget_messages()
 
-        # 5. 스트리밍 응답 생성
+        # 5. RunnableWithMessageHistory로 체인 래핑
+        chain_with_history = RunnableWithMessageHistory(
+            chain,
+            lambda session_id: chat_history_instance,
+            input_messages_key="input",
+            history_messages_key="chat_history",
+        )
+
+        # 6. 스트리밍 응답 생성
         full_content = ""
-        async for chunk in chain.astream({
-            "company": company,
-            "recruit_notice": recruit_notice or "채용공고 정보 없음",
-            "question": question_content,
-            "max_length": max_length or "제한 없음",
-            "experiences": experiences_text,
-            "chat_history": history_messages,
-            "input": user_message,
-        }):
+        async for chunk in chain_with_history.astream(
+            {
+                "company": company,
+                "recruit_notice": recruit_notice or "채용공고 정보 없음",
+                "question": question_content,
+                "max_length": max_length or "제한 없음",
+                "experiences": experiences_text,
+                "input": user_message,
+            },
+            config={"configurable": {"session_id": str(question_id)}},
+        ):
             content = chunk.content
             if content:
                 full_content += content
                 yield json.dumps({"type": "content", "content": content}, ensure_ascii=False)
 
-        # 6. 완료 이벤트
+        # 7. 완료 이벤트
         yield json.dumps({"type": "done", "content": full_content}, ensure_ascii=False)
 
     except Exception as e:
