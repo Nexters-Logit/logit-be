@@ -78,7 +78,7 @@ class ChatHistoryItem(BaseModel):
 
 
 class ChatHistoryResponse(BaseModel):
-    """채팅 히스토리 조회 응답"""
+    """채팅 히스토리 조회 응답 (Cursor 기반 페이지네이션)"""
 
     project_name: str
     created_at: str
@@ -86,7 +86,15 @@ class ChatHistoryResponse(BaseModel):
     question: str
     chats: List[ChatHistoryItem]
     experience_ids: List[str] = []
-    
+    next_cursor: str | None = Field(
+        default=None,
+        description="다음 페이지 조회용 cursor (없으면 마지막 페이지)"
+    )
+    has_more: bool = Field(
+        default=False,
+        description="더 많은 데이터가 있는지 여부"
+    )
+
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -113,7 +121,9 @@ class ChatHistoryResponse(BaseModel):
                     ],
                     "experience_ids": [
                         "7c9e6679-7425-40de-944b-e07fc1f90ae7"
-                    ]
+                    ],
+                    "next_cursor": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
+                    "has_more": True
                 }
             ]
         }
