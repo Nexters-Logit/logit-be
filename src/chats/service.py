@@ -8,7 +8,7 @@ from sqlmodel import select
 
 from .models import Chat, ChatRole
 from .schemas import ChatHistoryResponse, ChatHistoryItem, UpdateAnswerResponse
-from .llm_service import generate_ai_response_stream
+from .llm_service import generate_ai_response_stream, classify_draft_intent
 from src.questions.models import Question
 from src.projects.models import Project
 
@@ -41,13 +41,10 @@ async def create_assistant_chat(
     db: AsyncSession,
     question: Question,
     content: str,
-    user_content: str,
+    is_draft: bool,
     experience_ids: List[str] | None = None
 ) -> Chat:
     """AI 메시지 생성"""
-
-    # 초안 생성 의도 감지
-    is_draft = detect_draft_intent(user_content)
 
     ai_msg = Chat(
         question_id=question.id,
@@ -72,16 +69,6 @@ async def get_question_by_id(db: AsyncSession, question_id: UUID) -> Question | 
     statement = select(Question).where(Question.id == question_id)
     result = await db.execute(statement)
     return result.scalars().first()
-
-
-# todo: 이후 고도화
-def detect_draft_intent(content: str) -> bool:
-    """초안 생성 의도 감지"""
-
-    keywords = ["써줘", "생성", "초안", "작성해줘", "만들어줘"]
-    content_lower = content.lower()
-
-    return any(keyword in content_lower for keyword in keywords)
 
 
 async def send_chat_stream(
@@ -121,8 +108,8 @@ async def send_chat_stream(
     chat_history = await get_chat_history_by_question(db, question_id)
     chat_history = [c for c in chat_history if c.id != user_chat.id]
 
-    # 5. 초안 여부 판단
-    is_draft = detect_draft_intent(content)
+    # 5. 초안 여부 판단 (Function Calling)
+    is_draft = await classify_draft_intent(content)
 
     # 6. AI 응답 스트리밍
     full_content = ""
@@ -149,7 +136,7 @@ async def send_chat_stream(
                 db=db,
                 question=question,
                 content=full_content,
-                user_content=content,
+                is_draft=is_draft,
                 experience_ids=experience_ids,
             )
 

@@ -4,6 +4,7 @@ from typing import AsyncGenerator
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
+from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
 
 from src.config import settings
@@ -13,13 +14,44 @@ from .models import Chat, ChatRole
 from .prompts import COVER_LETTER_SYSTEM_PROMPT
 
 
-# LLM 초기화
+# LLM 초기화 (스트리밍용)
 llm = ChatOpenAI(
     model="gpt-4o-mini",
     api_key=settings.OPENAI_API_KEY,
     streaming=True,
     temperature=0.7,
 )
+
+# LLM 초기화 (Function Calling용, 비스트리밍)
+llm_for_classification = ChatOpenAI(
+    model="gpt-4o-mini",
+    api_key=settings.OPENAI_API_KEY,
+    streaming=False,
+    temperature=0,
+)
+
+
+# Function Calling 스키마 정의
+class DraftClassification(BaseModel):
+    """사용자 요청이 자기소개서 초안 작성 요청인지 판단"""
+
+    is_draft: bool = Field(
+        description="자기소개서 초안 작성 요청이면 True, 아니면 False. "
+                    "True 예시: '써줘', '작성해줘', '만들어줘', '초안', '생성해줘' 등 / "
+                    "False 예시: 질문, 피드백 요청, 수정 요청, 일반 대화"
+    )
+
+
+async def classify_draft_intent(user_message: str) -> bool:
+    """Function Calling으로 초안 작성 의도 판단"""
+
+    llm_with_structured = llm_for_classification.with_structured_output(DraftClassification)
+
+    result = await llm_with_structured.ainvoke(
+        f"다음 사용자 메시지가 자기소개서 초안 작성 요청인지 판단하세요:\n\n{user_message}"
+    )
+
+    return result.is_draft
 
 
 def _format_experience(exp: Experience) -> str:
