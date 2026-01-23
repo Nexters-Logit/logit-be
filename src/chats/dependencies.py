@@ -16,10 +16,12 @@ class LLMProvider:
         self._streaming_llm: ChatOpenAI | None = None
         self._classification_llm: ChatOpenAI | None = None
 
-    @property
+    `@property`
     def streaming_llm(self) -> ChatOpenAI:
         """스트리밍용 LLM (lazy initialization)"""
         if self._streaming_llm is None:
+            if not settings.OPENAI_API_KEY:
+                raise ValueError("OPENAI_API_KEY must be set in .env")
             self._streaming_llm = ChatOpenAI(
                 model=settings.OPENAI_MODEL,
                 api_key=settings.OPENAI_API_KEY,
