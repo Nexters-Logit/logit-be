@@ -97,7 +97,10 @@ async def send_chat_stream(
         return
 
     # 3. 초안 여부 판단 (Function Calling) - 사용자 메시지 저장 전에 먼저 판단
-    is_draft = await classify_draft_intent(content)
+    try:
+        is_draft = await classify_draft_intent(content)
+    except Exception:
+        is_draft = False  # 판단 실패 시 기본값
 
     # 4. 사용자 메시지 저장
     await create_user_chat(
