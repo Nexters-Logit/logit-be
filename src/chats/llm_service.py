@@ -70,6 +70,7 @@ def _format_experience(exp: Experience) -> str:
 """
 
 
+
 def get_experiences_by_ids(
     qdrant_client: QdrantClient,
     experience_ids: list[str],

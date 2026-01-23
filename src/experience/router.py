@@ -1,4 +1,4 @@
-"""Experience API endpoints."""
+"""경험 API 엔드포인트"""
 
 from fastapi import APIRouter, HTTPException, Query, status
 
@@ -24,7 +24,6 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
     responses=RESPONSES_CREATE_WITH_AUTH,
     summary="경험 등록",
-    description="STAR 형식으로 새로운 경험을 등록합니다. AI가 자동으로 관련 태그(1~3개)를 생성하고, 임베딩을 생성하여 시맨틱 검색이 가능합니다.",
 )
 def create_experience(
     experience_create: ExperienceCreate,
@@ -32,7 +31,7 @@ def create_experience(
     qdrant_client: QdrantDep,
 ) -> ExperienceRead:
     """
-    Create a new experience with STAR format.
+    STAR 형식으로 새로운 경험을 등록합니다. AI가 자동으로 관련 태그(1~3개)를 생성하고, 임베딩을 생성하여 시맨틱 검색이 가능합니다.
 
     - **title**: 경험 제목
     - **date**: 경험 발생 날짜 (YYYY-MM-DD)
@@ -59,7 +58,6 @@ def create_experience(
     response_model=ExperienceListResponse,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="경험 목록 조회",
-    description="사용자의 모든 경험을 조회합니다. 페이지네이션을 지원합니다.",
 )
 def list_experiences(
     current_user: ActiveUser,
@@ -68,7 +66,7 @@ def list_experiences(
     offset: int = Query(0, ge=0, description="오프셋"),
 ) -> ExperienceListResponse:
     """
-    List all experiences for the current user with pagination.
+    사용자의 모든 경험을 조회합니다. 페이지네이션을 지원합니다.
 
     - **limit**: 페이지당 항목 수 (기본: 100, 최대: 1000)
     - **offset**: 오프셋 (기본: 0)
@@ -93,7 +91,6 @@ def list_experiences(
     response_model=ExperienceSearchResult,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="경험 검색",
-    description="자연어 쿼리로 경험을 시맨틱 검색합니다. 유사도 점수와 함께 결과를 반환합니다.",
 )
 def search_experiences(
     current_user: ActiveUser,
@@ -102,12 +99,12 @@ def search_experiences(
     limit: int = Query(10, ge=1, le=100, description="최대 결과 수"),
 ) -> ExperienceSearchResult:
     """
-    Semantic search for experiences using natural language.
+    자연어 쿼리로 경험을 시맨틱 검색합니다. 유사도 점수와 함께 결과를 반환합니다.
 
     - **q**: 검색 쿼리 (자연어)
     - **limit**: 최대 결과 수 (기본: 10, 최대: 100)
 
-    Returns experiences ranked by semantic similarity with scores.
+    유사도 점수와 함께 관련성 높은 순서로 결과를 반환합니다.
     """
     results = service.search_experiences(
         client=qdrant_client,
@@ -136,7 +133,6 @@ def search_experiences(
     response_model=ExperienceRead,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="경험 상세 조회",
-    description="특정 경험의 상세 정보를 조회합니다.",
 )
 def get_experience(
     experience_id: str,
@@ -144,11 +140,10 @@ def get_experience(
     qdrant_client: QdrantDep,
 ) -> ExperienceRead:
     """
-    Get a single experience by ID.
+    특정 경험의 상세 정보를 조회합니다.
 
     - **experience_id**: 경험 ID (UUID)
-
-    Returns 404 if the experience doesn't exist or doesn't belong to the current user.
+    - 경험을 찾을 수 없거나 소유권이 없는 경우 404 에러를 반환합니다.
     """
     experience = service.get_experience(
         client=qdrant_client,
@@ -159,7 +154,7 @@ def get_experience(
     if not experience:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Experience not found",
+            detail="Experience not found.",
         )
 
     return ExperienceRead(**experience.model_dump())
@@ -170,7 +165,6 @@ def get_experience(
     response_model=ExperienceRead,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="경험 수정",
-    description="기존 경험을 수정합니다. 내용이 변경되면 AI가 태그를 재생성하고 임베딩도 자동으로 재생성됩니다.",
 )
 def update_experience(
     experience_id: str,
@@ -179,18 +173,14 @@ def update_experience(
     qdrant_client: QdrantDep,
 ) -> ExperienceRead:
     """
-    Update an existing experience (partial update).
+    기존 경험을 수정합니다.
 
     - **experience_id**: 경험 ID (UUID)
     - **experience_update**: 수정할 필드 (부분 업데이트 지원)
 
-    All fields are optional. Only provided fields will be updated.
-    If content (title, situation, task, action, result) changes:
-    - AI will regenerate tags automatically
-    - Embedding will be regenerated for semantic search
-
-    Raises:
-    - 404: Experience not found or doesn't belong to the current user
+    내용(title, situation, task, action, result)이 변경되면:
+    - AI가 태그를 자동으로 재생성합니다.
+    - 시맨틱 검색을 위한 임베딩이 재생성됩니다.
     """
     experience = service.update_experience(
         client=qdrant_client,
@@ -202,7 +192,7 @@ def update_experience(
     if not experience:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Experience not found or could not be updated",
+            detail="Experience not found or cannot be updated.",
         )
 
     return ExperienceRead(**experience.model_dump())
@@ -213,7 +203,6 @@ def update_experience(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="경험 삭제",
-    description="경험을 영구적으로 삭제합니다. 삭제 전에 소유권을 확인합니다.",
 )
 def delete_experience(
     experience_id: str,
@@ -221,20 +210,11 @@ def delete_experience(
     qdrant_client: QdrantDep,
 ) -> None:
     """
-    Delete an experience permanently.
+    경험을 영구적으로 삭제합니다.
 
     - **experience_id**: 경험 ID (UUID)
-
-    Returns:
-    - 204 No Content: 삭제 성공
-
-    Raises:
-    - 404: Experience not found or doesn't belong to the current user
-    - 401: Not authenticated
-    - 403: User is not active
+    - 경험을 찾을 수 없거나 소유권이 없는 경우 404 에러를 반환합니다.
     """
-    # Service에서 소유권 검증 후 삭제
-    # 존재하지 않거나 소유자가 아니면 404 발생
     service.delete_experience(
         client=qdrant_client,
         experience_id=experience_id,

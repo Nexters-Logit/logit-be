@@ -1,3 +1,5 @@
+"""인증 API 엔드포인트"""
+
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
@@ -5,10 +7,12 @@ from fastapi.responses import RedirectResponse
 
 from src.auth import constants, schemas, service
 from src.common.responses import (
+    RESPONSES_CRUD_WITH_AUTH,
     ERROR_400_BAD_REQUEST,
     ERROR_401_UNAUTHORIZED,
     ERROR_404_NOT_FOUND,
     ERROR_501_NOT_IMPLEMENTED,
+    create_responses,
 )
 from src.config import settings
 from src.security import create_access_token, create_refresh_token, verify_token
@@ -21,18 +25,21 @@ router = APIRouter()
 @router.get(
     "/google",
     summary="Google OAuth 로그인",
-    description="사용자를 Google OAuth2 인증 페이지로 리디렉션합니다. 성공 시 설정된 콜백 URL로 리디렉션됩니다.",
     responses={
         307: {"description": "Google 인증 페이지로 리디렉션"},
         501: ERROR_501_NOT_IMPLEMENTED,
     },
 )
 async def google_login():
-    """Redirects the user to the Google OAuth login page."""
+    """
+    Google OAuth 로그인 페이지로 리디렉션합니다.
+
+    - Google 클라이언트 ID가 설정되지 않은 경우 501 에러를 반환합니다.
+    """
     if not settings.GOOGLE_CLIENT_ID:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="Google OAuth not configured",
+            detail="Google OAuth is not configured.",
         )
 
     google_auth_url = (
@@ -50,21 +57,24 @@ async def google_login():
     "/google/callback",
     response_model=schemas.OAuthCallbackResponse,
     summary="Google OAuth 콜백 처리",
-    description="Google로부터 리디렉션된 후 인증 코드를 처리합니다. 신규 사용자인 경우 계정을 생성하고, 기존 사용자인 경우 로그인 처리 후 JWT 액세스 토큰과 리프레시 토큰을 발급합니다.",
-    responses={400: ERROR_400_BAD_REQUEST, 501: ERROR_501_NOT_IMPLEMENTED},
+    responses=create_responses(
+        {400: ERROR_400_BAD_REQUEST},
+        {501: ERROR_501_NOT_IMPLEMENTED},
+    ),
 )
 async def google_callback(code: str, session: SessionDep):
     """
-    Handles the Google OAuth callback after user authentication.
-    It exchanges the code for tokens, gets user info, creates or logs in the user,
-    and returns JWT access and refresh tokens.
+    Google OAuth 콜백을 처리합니다.
 
-    - **code**: The authorization code provided by Google.
+    - **code**: Google로부터 받은 인증 코드
+    - 인증 코드를 토큰으로 교환하고, 사용자 정보를 조회합니다.
+    - 신규 사용자인 경우 계정을 자동 생성합니다.
+    - JWT 액세스 토큰과 리프레시 토큰을 발급하여 반환합니다.
     """
     if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="Google OAuth not configured",
+            detail="Google OAuth is not configured.",
         )
 
     try:
@@ -80,40 +90,47 @@ async def google_callback(code: str, session: SessionDep):
     "/refresh",
     response_model=schemas.Token,
     summary="액세스 토큰 갱신",
-    description="유효한 리프레시 토큰을 사용하여 새로운 액세스 토큰과 리프레시 토큰을 발급받습니다. (Refresh Token Rotation)",
-    responses={
-        400: ERROR_400_BAD_REQUEST,
-        401: ERROR_401_UNAUTHORIZED,
-        404: ERROR_404_NOT_FOUND,
-    },
+    responses=create_responses(
+        {400: ERROR_400_BAD_REQUEST},
+        {401: ERROR_401_UNAUTHORIZED},
+        {404: ERROR_404_NOT_FOUND},
+    ),
 )
 async def refresh_access_token(request: schemas.RefreshTokenRequest, session: SessionDep):
     """
-    Refreshes an access token using a valid refresh token (implements Refresh Token Rotation).
+    리프레시 토큰을 사용하여 새로운 토큰을 발급합니다.
 
-    - **refresh_token**: The user's valid refresh token.
+    - **refresh_token**: 유효한 리프레시 토큰
+    - Refresh Token Rotation 방식을 사용하여 보안을 강화합니다.
+    - 이전 리프레시 토큰은 무효화됩니다.
     """
     user_id = verify_token(request.refresh_token, token_type="refresh")
 
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token",
+            detail="Invalid or expired refresh token.",
         )
 
     user = await user_service.get_user_by_id(session=session, user_id=UUID(user_id))
 
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
 
     if user.refresh_token != request.refresh_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token has been revoked or already used",
+            detail="Refresh token has been revoked or already used.",
         )
 
     if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Inactive user.",
+        )
 
     new_access_token = create_access_token(subject=str(user.id))
     new_refresh_token = create_refresh_token(subject=str(user.id))
@@ -132,26 +149,26 @@ async def refresh_access_token(request: schemas.RefreshTokenRequest, session: Se
     "/logout",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="로그아웃",
-    description="사용자의 리프레시 토큰을 무효화하여 로그아웃 처리합니다.",
     responses={401: ERROR_401_UNAUTHORIZED},
 )
 async def logout(request: schemas.LogoutRequest, session: SessionDep):
     """
-    Logs out the user by invalidating their refresh token.
+    로그아웃을 처리합니다.
 
-    - **refresh_token**: The user's refresh token to invalidate.
+    - **refresh_token**: 무효화할 리프레시 토큰
+    - 액세스 토큰과 리프레시 토큰을 모두 무효화하여 즉시 로그아웃 처리합니다.
     """
     user_id = verify_token(request.refresh_token, token_type="refresh")
 
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
+            detail="Invalid refresh token.",
         )
 
     user = await user_service.get_user_by_id(session=session, user_id=UUID(user_id))
 
     if user:
-        await user_service.update_refresh_token(session=session, db_user=user, refresh_token="")
+        user_service.update_refresh_token(session=session, db_user=user, refresh_token="")
 
     return None

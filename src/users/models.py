@@ -11,8 +11,8 @@ from sqlmodel import Field, SQLModel
 class OAuthProvider(str, Enum):
     """OAuth provider types."""
 
-    GOOGLE = "google"
-    APPLE = "apple"
+    google = "google"
+    apple = "apple"
 
 
 class User(SQLModel, table=True):
@@ -36,7 +36,7 @@ class User(SQLModel, table=True):
         default=None, sa_column=Column(DateTime(timezone=True))
     )
 
-    # Refresh token for JWT
+    # JWT tokens
     refresh_token: str | None = Field(default=None)
 
     # Timestamps

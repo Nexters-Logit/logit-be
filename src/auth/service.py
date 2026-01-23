@@ -58,7 +58,7 @@ async def google_oauth_flow(code: str, session: AsyncSession) -> OAuthCallbackRe
 
     # Check if user exists
     existing_user = await user_service.get_user_by_oauth(
-        session=session, provider=OAuthProvider.GOOGLE, provider_id=google_id
+        session=session, provider=OAuthProvider.google, provider_id=google_id
     )
 
     # Existing user - return JWT tokens
@@ -66,8 +66,10 @@ async def google_oauth_flow(code: str, session: AsyncSession) -> OAuthCallbackRe
         access_token_jwt = create_access_token(subject=str(existing_user.id))
         refresh_token_jwt = create_refresh_token(subject=str(existing_user.id))
 
-        await user_service.update_refresh_token(
-            session=session, db_user=existing_user, refresh_token=refresh_token_jwt
+        await user_service.update_tokens(
+            session=session,
+            db_user=existing_user,
+            refresh_token=refresh_token_jwt,
         )
 
         return OAuthCallbackResponse(
@@ -82,7 +84,7 @@ async def google_oauth_flow(code: str, session: AsyncSession) -> OAuthCallbackRe
         oauth_user=OAuthUserCreate(
             email=email,
             full_name=user_data.get("name"),
-            oauth_provider=OAuthProvider.GOOGLE,
+            oauth_provider=OAuthProvider.google,
             oauth_provider_id=google_id,
             profile_image_url=user_data.get("picture"),
         ),
@@ -92,7 +94,7 @@ async def google_oauth_flow(code: str, session: AsyncSession) -> OAuthCallbackRe
     access_token_jwt = create_access_token(subject=str(new_user.id))
     refresh_token_jwt = create_refresh_token(subject=str(new_user.id))
 
-    # Store refresh token
+    # Store tokens
     await user_service.update_refresh_token(
         session=session, db_user=new_user, refresh_token=refresh_token_jwt
     )
