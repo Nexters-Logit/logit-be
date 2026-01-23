@@ -24,14 +24,14 @@ async def create_project(
     session.add(db_project)
     await session.flush()  # project.id 생성을 위해 flush
 
-    # 문항 생성
-    for question_data in project_create.questions:
+    # 문항 생성 (order는 리스트 순서 기반으로 자동 생성)
+    for idx, question_data in enumerate(project_create.questions, start=1):
         db_question = Question(
             project_id=db_project.id,
             user_id=user_id,
             question=question_data.question,
             max_length=question_data.max_length,
-            order=question_data.order,
+            order=idx,
         )
         session.add(db_question)
 
