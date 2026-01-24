@@ -205,3 +205,70 @@ class ExperienceSearchResult(BaseModel):
             }
         }
     )
+
+
+class ExperienceWithQuestionSimilarity(BaseModel):
+    """Schema for experience with question similarity score."""
+
+    experience: ExperienceRead = Field(..., description="경험 데이터")
+    similarity_score: float = Field(..., description="질문과의 유사도 점수 (0~1, 높을수록 관련성 높음)")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "experience": {
+                    "id": "123e4567-e89b-12d3-a456-426614174000",
+                    "user_id": "987fcdeb-51a2-43d7-9876-543210fedcba",
+                    "title": "AI 챗봇 서비스 개발",
+                    "start_date": "2024-06-01",
+                    "end_date": "2024-06-15",
+                    "experience_type": "동아리 활동",
+                    "situation": "팀 프로젝트에서 사용자 문의 응대 자동화가 필요했습니다.",
+                    "task": "자연어 처리 기반 챗봇을 설계하고 구현해야 했습니다.",
+                    "action": "OpenAI API를 활용하여 RAG 기반 챗봇을 개발했습니다.",
+                    "result": "응답 시간을 70% 단축하고 만족도를 85%로 향상시켰습니다.",
+                    "category": "기술적 전문성",
+                    "tags": "전문성, 문제해결력, 고객 이해력",
+                    "created_at": "2024-06-15T10:00:00Z",
+                    "updated_at": "2024-06-15T10:00:00Z",
+                },
+                "similarity_score": 0.87,
+            }
+        }
+    )
+
+
+class ExperienceQuestionMatchResult(BaseModel):
+    """Schema for experiences matched with question."""
+
+    experiences: list[ExperienceWithQuestionSimilarity] = Field(..., description="유사도가 높은 순서로 정렬된 경험 목록")
+    total: int = Field(..., description="전체 경험 개수")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "experiences": [
+                    {
+                        "experience": {
+                            "id": "123e4567-e89b-12d3-a456-426614174000",
+                            "user_id": "987fcdeb-51a2-43d7-9876-543210fedcba",
+                            "title": "AI 챗봇 서비스 개발",
+                            "start_date": "2024-06-01",
+                            "end_date": "2024-06-15",
+                            "experience_type": "동아리 활동",
+                            "situation": "팀 프로젝트에서 사용자 문의 응대 자동화가 필요했습니다.",
+                            "task": "자연어 처리 기반 챗봇을 설계하고 구현해야 했습니다.",
+                            "action": "OpenAI API를 활용하여 RAG 기반 챗봇을 개발했습니다.",
+                            "result": "응답 시간을 70% 단축하고 만족도를 85%로 향상시켰습니다.",
+                            "category": "기술적 전문성",
+                            "tags": "전문성, 문제해결력, 고객 이해력",
+                            "created_at": "2024-06-15T10:00:00Z",
+                            "updated_at": "2024-06-15T10:00:00Z",
+                        },
+                        "similarity_score": 0.87,
+                    }
+                ],
+                "total": 1,
+            }
+        }
+    )
