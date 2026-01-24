@@ -68,7 +68,8 @@ def sample_experience_data() -> dict:
     """Sample experience data for testing."""
     return {
         "title": "AI 챗봇 서비스 개발",
-        "date": "2024-06-15",
+        "start_date": "2024-06-01",
+        "end_date": "2024-06-15",
         "experience_type": "동아리 활동",
         "situation": "팀 프로젝트에서 사용자 문의 응대 자동화가 필요했습니다.",
         "task": "자연어 처리 기반 챗봇을 설계하고 구현해야 했습니다.",
@@ -85,7 +86,8 @@ def test_experience_model_creation():
         id=str(uuid4()),
         user_id=str(uuid4()),
         title="Test Experience",
-        date=dt.date(2024, 6, 15),
+        start_date=dt.date(2024, 6, 1),
+        end_date=dt.date(2024, 6, 15),
         experience_type=ExperienceType.PROJECT,
         situation="Test situation",
         task="Test task",
@@ -107,7 +109,8 @@ def test_experience_create_schema():
     """Test ExperienceCreate schema validation."""
     data = {
         "title": "Test",
-        "date": dt.date(2024, 6, 15),
+        "start_date": dt.date(2024, 6, 1),
+        "end_date": dt.date(2024, 6, 15),
         "experience_type": ExperienceType.PROJECT,
         "situation": "Situation",
         "task": "Task",
@@ -165,7 +168,8 @@ def test_create_experience_invalid_data(
     mock_get_qdrant.return_value = MagicMock()
     invalid_data = {
         "title": "",  # Empty title should fail
-        "date": "2024-06-15",
+        "start_date": "2024-06-01",
+        "end_date": "2024-06-15",
     }
     response = client.post(
         "/api/v1/experiences", headers=auth_headers, json=invalid_data
@@ -190,7 +194,8 @@ def test_list_experiences_success(
         "id": str(uuid4()),
         "user_id": str(test_user.id),
         "title": "Test Experience",
-        "date": "2024-06-15",
+        "start_date": "2024-06-01",
+        "end_date": "2024-06-15",
         "experience_type": "동아리 활동",
         "situation": "Test situation",
         "task": "Test task",
@@ -236,7 +241,8 @@ def test_get_experience_success(
         "id": experience_id,
         "user_id": str(test_user.id),
         "title": "Test Experience",
-        "date": "2024-06-15",
+        "start_date": "2024-06-01",
+        "end_date": "2024-06-15",
         "experience_type": "동아리 활동",
         "situation": "Test situation",
         "task": "Test task",
@@ -297,7 +303,8 @@ def test_update_experience_success(
         "id": experience_id,
         "user_id": str(test_user.id),
         "title": "Original Title",
-        "date": "2024-06-15",
+        "start_date": "2024-06-01",
+        "end_date": "2024-06-15",
         "experience_type": "동아리 활동",
         "situation": "Original situation",
         "task": "Original task",
@@ -341,7 +348,8 @@ def test_delete_experience_success(
         "id": experience_id,
         "user_id": str(test_user.id),
         "title": "To Be Deleted",
-        "date": "2024-06-15",
+        "start_date": "2024-06-01",
+        "end_date": "2024-06-15",
         "experience_type": "동아리 활동",
         "situation": "Test",
         "task": "Test",
@@ -379,7 +387,8 @@ def test_search_experiences_success(
         "id": str(uuid4()),
         "user_id": str(test_user.id),
         "title": "AI 챗봇 개발",
-        "date": "2024-06-15",
+        "start_date": "2024-06-01",
+        "end_date": "2024-06-15",
         "experience_type": "동아리 활동",
         "situation": "Test",
         "task": "Test",
@@ -441,7 +450,8 @@ def test_get_other_user_experience_forbidden(
         "id": experience_id,
         "user_id": other_user_id,
         "title": "Other User's Experience",
-        "date": "2024-06-15",
+        "start_date": "2024-06-01",
+        "end_date": "2024-06-15",
         "experience_type": "동아리 활동",
         "situation": "Test",
         "task": "Test",

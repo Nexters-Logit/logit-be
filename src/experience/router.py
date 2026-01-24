@@ -34,7 +34,8 @@ def create_experience(
     STAR 형식으로 새로운 경험을 등록합니다. AI가 자동으로 관련 태그(1~3개)를 생성하고, 임베딩을 생성하여 시맨틱 검색이 가능합니다.
 
     - **title**: 경험 제목
-    - **date**: 경험 발생 날짜 (YYYY-MM-DD)
+    - **start_date**: 경험 시작 날짜 (YYYY-MM-DD)
+    - **end_date**: 경험 종료 날짜 (YYYY-MM-DD)
     - **experience_type**: 경험 타입 (동아리 활동, 정규직, 봉사 활동 등)
     - **situation**: 상황 (STAR의 S)
     - **task**: 과제 (STAR의 T)
