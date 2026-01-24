@@ -117,6 +117,9 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4o-mini"
     OPENAI_TEMPERATURE: float = 0.7
 
+    # Chat Rate Limit
+    CHAT_DAILY_LIMIT: int = 15  # 일일 채팅 제한 횟수
+
     @model_validator(mode="after")
     def _enforce_non_default_secrets(self) -> Self:
         """Validate that required secrets are set."""
