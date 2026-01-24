@@ -240,13 +240,13 @@ async def get_chat_history_response(
     # 5. project_name 생성: "company_job"
     project_name = f"{project.company}_{project.job_position}"
 
-    # 6. created_at 포맷: "2026.01.20"
-    created_at_str = project.created_at.strftime("%Y.%m.%d")
+    # 6. created_at
+    project_created_at = project.created_at
 
     # 7. 응답 생성
     return ChatHistoryResponse(
         project_name=project_name,
-        created_at=created_at_str,
+        project_created_at=project_created_at,
         question_id=question.id,
         question=question.question,
         chats=[

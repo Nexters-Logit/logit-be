@@ -52,7 +52,7 @@ GET /projects/chats/{question_id}?cursor=1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed&si
                             "summary": "더 많은 페이지가 있는 경우",
                             "value": {
                                 "project_name": "네이버_백엔드개발자",
-                                "created_at": "2026.01.20",
+                                "project_created_at": "2026-01-20T10:00:00Z",
                                 "question_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
                                 "question": "지원동기 및 향후 목표",
                                 "chats": [

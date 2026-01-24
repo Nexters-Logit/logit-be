@@ -81,7 +81,7 @@ class ChatHistoryResponse(BaseModel):
     """채팅 히스토리 조회 응답 (Cursor 기반 페이지네이션)"""
 
     project_name: str
-    created_at: str
+    project_created_at: datetime
     question_id: UUID
     question: str
     chats: List[ChatHistoryItem]
@@ -100,7 +100,7 @@ class ChatHistoryResponse(BaseModel):
             "examples": [
                 {
                     "project_name": "네이버_백엔드개발자",
-                    "created_at": "2026.01.20",
+                    "project_created_at": "2026-01-20T10:00:00Z",
                     "question_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
                     "question": "지원동기 및 향후 목표",
                     "chats": [
