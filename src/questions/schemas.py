@@ -84,7 +84,7 @@ class QuestionListItem(BaseModel):
                 "id": "123e4567-e89b-12d3-a456-426614174000",
                 "question": "본인이 가장 열정적으로 참여한 프로젝트 경험을 설명해 주세요.",
                 "max_length": 1000,
-                "answer": "AI 챗봇 서비스를 개발하며 팀을 이끌었습니다...",
+                "answer": "",
             }
         },
     )

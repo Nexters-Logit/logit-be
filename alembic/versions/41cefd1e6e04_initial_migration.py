@@ -43,6 +43,7 @@ def upgrade() -> None:
     sa.Column('company', sqlmodel.sql.sqltypes.AutoString(length=255), nullable=False),
     sa.Column('job_position', sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False),
     sa.Column('recruit_notice', sa.Text(), nullable=False),
+    sa.Column('company_talent', sa.Text(), nullable=True),
     sa.Column('due_date', sa.Date(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),

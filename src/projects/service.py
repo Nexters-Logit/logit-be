@@ -42,18 +42,46 @@ async def create_project(
 
 async def get_projects(
     session: AsyncSession, user_id: UUID, skip: int = 0, limit: int = 100
-) -> List[Project]:
-    """사용자의 프로젝트 목록 조회 (삭제되지 않은 것만, 최근 활동순)"""
+) -> List[dict]:
+    """사용자의 프로젝트 목록 조회 (삭제되지 않은 것만, 최근 활동순, 문항 1번 ID 포함)"""
+    # 각 프로젝트의 첫 번째 문항(order=1) ID를 서브쿼리로 가져옴
+    first_question_subquery = (
+        select(Question.id)
+        .where(Question.project_id == Project.id)
+        .where(Question.order == 1)
+        .where(Question.deleted_at.is_(None))
+        .correlate(Project)
+        .scalar_subquery()
+    )
+
     statement = (
-        select(Project)
+        select(
+            Project.id,
+            Project.company,
+            Project.job_position,
+            Project.updated_at,
+            first_question_subquery.label("question_id"),
+        )
         .where(Project.user_id == user_id)
         .where(Project.deleted_at.is_(None))
         .order_by(Project.updated_at.desc())
         .offset(skip)
         .limit(limit)
     )
+
     result = await session.execute(statement)
-    return list(result.scalars().all())
+    rows = result.all()
+
+    return [
+        {
+            "id": row.id,
+            "company": row.company,
+            "job_position": row.job_position,
+            "updated_at": row.updated_at,
+            "question_id": row.question_id,
+        }
+        for row in rows
+    ]
 
 
 async def get_project(

@@ -19,6 +19,11 @@ class Project(SQLModel, table=True):
         sa_column=Column(Text, nullable=False),
         description="채용공고 전체 내용",
     )
+    company_talent: str | None = Field(
+        default=None,
+        sa_column=Column(Text, nullable=True),
+        description="회사에서 원하는 인재상",
+    )
     due_date: date | None = Field(
         default=None,
         sa_column=Column(Date, nullable=True),

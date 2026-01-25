@@ -14,6 +14,7 @@ class ProjectCreate(BaseModel):
     company: str = Field(..., description="기업명")
     job_position: str = Field(..., description="직무")
     recruit_notice: str = Field(..., description="채용 공고 내용")
+    company_talent: str | None = Field(None, description="회사에서 원하는 인재상")
     due_date: date | None = Field(None, description="마감일")
     questions: list[QuestionCreate] = Field(default=[], description="문항 목록")
 
@@ -23,6 +24,7 @@ class ProjectCreate(BaseModel):
                 "company": "카카오",
                 "job_position": "백엔드 개발자",
                 "recruit_notice": "2024년 상반기 신입 개발자 공개채용",
+                "company_talent": "성장 가능성, 협업 능력, 문제 해결 능력",
                 "due_date": "2024-12-31",
                 "questions": [
                     {
@@ -45,6 +47,7 @@ class ProjectUpdate(BaseModel):
     company: str | None = Field(None, description="기업명")
     job_position: str | None = Field(None, description="직무")
     recruit_notice: str | None = Field(None, description="채용 공고 내용")
+    company_talent: str | None = Field(None, description="회사에서 원하는 인재상")
     due_date: date | None = Field(None, description="마감일")
 
     model_config = ConfigDict(
@@ -52,6 +55,7 @@ class ProjectUpdate(BaseModel):
             "example": {
                 "company": "네이버",
                 "job_position": "프론트엔드 개발자",
+                "company_talent": "성장 가능성, 협업 능력, 문제 해결 능력",
                 "due_date": "2025-01-15",
             }
         }
@@ -65,6 +69,7 @@ class ProjectListItem(BaseModel):
     company: str = Field(..., description="기업명")
     job_position: str = Field(..., description="직무")
     updated_at: datetime = Field(..., description="최근 활동일")
+    question_id: UUID = Field(..., description="문항 1번 ID")
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -74,6 +79,7 @@ class ProjectListItem(BaseModel):
                 "company": "카카오",
                 "job_position": "백엔드 개발자",
                 "updated_at": "2024-06-15T10:00:00Z",
+                "question_id": "123e4567-e89b-12d3-a456-426614174000",
             }
         },
     )
@@ -125,12 +131,14 @@ class ProjectListResponse(BaseModel):
                         "company": "카카오",
                         "job_position": "백엔드 개발자",
                         "updated_at": "2024-06-15T10:00:00Z",
+                        "question_id": "123e4567-e89b-12d3-a456-426614174000",
                     },
                     {
                         "id": "223e4567-e89b-12d3-a456-426614174001",
                         "company": "네이버",
                         "job_position": "프론트엔드 개발자",
                         "updated_at": "2024-06-14T09:00:00Z",
+                        "question_id": "123e4567-e89b-12d3-a456-426614174000",
                     },
                 ],
                 "total": 2,
