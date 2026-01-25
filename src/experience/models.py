@@ -40,7 +40,8 @@ class ExperienceBase(BaseModel):
     """Base model for Experience with STAR format fields."""
 
     title: str = Field(..., min_length=1, max_length=200, description="경험 제목")
-    date: dt.date = Field(..., description="경험 발생 날짜 (YYYY-MM-DD)")
+    start_date: dt.date = Field(..., description="경험 시작 날짜 (YYYY-MM-DD)")
+    end_date: dt.date = Field(..., description="경험 종료 날짜 (YYYY-MM-DD)")
     experience_type: ExperienceType = Field(..., description="경험 타입")
     situation: str = Field(..., min_length=1, description="상황 (STAR의 S)")
     task: str = Field(..., min_length=1, description="과제 (STAR의 T)")
@@ -67,7 +68,8 @@ class Experience(ExperienceBase):
                 "id": "123e4567-e89b-12d3-a456-426614174000",
                 "user_id": "987fcdeb-51a2-43d7-9876-543210fedcba",
                 "title": "AI 챗봇 서비스 개발",
-                "date": "2024-06-15",
+                "start_date": "2024-06-01",
+                "end_date": "2024-06-15",
                 "experience_type": "동아리 활동",
                 "situation": "팀 프로젝트에서 사용자 문의 응대 자동화가 필요했습니다.",
                 "task": "자연어 처리 기반 챗봇을 설계하고 구현해야 했습니다.",

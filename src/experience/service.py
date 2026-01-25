@@ -1,16 +1,20 @@
 """Experience business logic."""
 
 from datetime import datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
 from openai import OpenAI
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue, PointStruct
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 
 from src.config import settings
 from src.experience.models import Experience
 from src.experience.schemas import ExperienceCreate, ExperienceUpdate
+from src.projects.models import Project
+from src.questions.models import Question
 
 # Initialize OpenAI client
 openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
@@ -446,4 +450,102 @@ def search_experiences(
         for point in search_result
     ]
 
+    return results
+
+
+async def get_experiences_with_question_similarity(
+    client: QdrantClient,
+    session: AsyncSession,
+    user_id: str,
+    question_id: UUID,
+) -> list[tuple[Experience, float]]:
+    """
+    Get all user experiences with similarity scores against a specific question and its project.
+
+    Args:
+        client: Qdrant client
+        session: Database session
+        user_id: Owner user ID
+        question_id: Question ID to match against
+
+    Returns:
+        List of tuples (Experience, similarity_score) sorted by score descending
+
+    Raises:
+        HTTPException: If question not found, unauthorized, or search fails
+    """
+    # Get question from database
+    question_statement = (
+        select(Question)
+        .where(Question.id == question_id)
+        .where(Question.user_id == UUID(user_id))
+        .where(Question.deleted_at.is_(None))
+    )
+    question_result = await session.execute(question_statement)
+    question = question_result.scalar_one_or_none()
+
+    if not question:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found",
+        )
+
+    # Get project from database
+    project_statement = (
+        select(Project)
+        .where(Project.id == question.project_id)
+        .where(Project.user_id == UUID(user_id))
+        .where(Project.deleted_at.is_(None))
+    )
+    project_result = await session.execute(project_statement)
+    project = project_result.scalar_one_or_none()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    # Combine question and project info into query text
+    query_text = f"""문항: {question.question}
+회사: {project.company}
+직무: {project.job_position}
+채용공고: {project.recruit_notice}"""
+
+    # Generate query embedding
+    try:
+        query_embedding = _generate_embedding(query_text)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate query embedding: {str(e)}",
+        )
+
+    # Filter by user_id
+    user_filter = Filter(
+        must=[
+            FieldCondition(
+                key="user_id",
+                match=MatchValue(value=user_id),
+            )
+        ]
+    )
+
+    # Search all experiences with similarity scores
+    # Set limit high to get all user experiences
+    search_result = client.query_points(
+        collection_name=settings.QDRANT_COLLECTION_NAME,
+        query=query_embedding,
+        query_filter=user_filter,
+        limit=10000,  # Large limit to get all experiences
+        with_payload=True,
+    ).points
+
+    # Convert to (Experience, score) tuples
+    results = [
+        (Experience(**point.payload), point.score)
+        for point in search_result
+    ]
+
+    # Results are already sorted by score descending from Qdrant
     return results

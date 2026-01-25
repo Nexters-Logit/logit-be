@@ -1,5 +1,7 @@
 """경험 API 엔드포인트"""
 
+from uuid import UUID
+
 from fastapi import APIRouter, HTTPException, Query, status
 
 from src.common.responses import RESPONSES_CREATE_WITH_AUTH, RESPONSES_CRUD_WITH_AUTH
@@ -8,12 +10,14 @@ from src.experience.dependencies import QdrantDep
 from src.experience.schemas import (
     ExperienceCreate,
     ExperienceListResponse,
+    ExperienceQuestionMatchResult,
     ExperienceRead,
     ExperienceSearchResult,
     ExperienceSearchResponse,
     ExperienceUpdate,
+    ExperienceWithQuestionSimilarity,
 )
-from src.users.dependencies import ActiveUser
+from src.users.dependencies import ActiveUser, SessionDep
 
 router = APIRouter()
 
@@ -34,7 +38,8 @@ def create_experience(
     STAR 형식으로 새로운 경험을 등록합니다. AI가 자동으로 관련 태그(1~3개)를 생성하고, 임베딩을 생성하여 시맨틱 검색이 가능합니다.
 
     - **title**: 경험 제목
-    - **date**: 경험 발생 날짜 (YYYY-MM-DD)
+    - **start_date**: 경험 시작 날짜 (YYYY-MM-DD)
+    - **end_date**: 경험 종료 날짜 (YYYY-MM-DD)
     - **experience_type**: 경험 타입 (동아리 활동, 정규직, 봉사 활동 등)
     - **situation**: 상황 (STAR의 S)
     - **task**: 과제 (STAR의 T)
@@ -219,4 +224,46 @@ def delete_experience(
         client=qdrant_client,
         experience_id=experience_id,
         user_id=str(current_user.id),
+    )
+
+
+@router.get(
+    "/match-question/{question_id}",
+    response_model=ExperienceQuestionMatchResult,
+    responses=RESPONSES_CRUD_WITH_AUTH,
+    summary="문항과 매칭되는 경험 조회",
+)
+async def get_experiences_by_question(
+    question_id: UUID,
+    current_user: ActiveUser,
+    qdrant_client: QdrantDep,
+    session: SessionDep,
+) -> ExperienceQuestionMatchResult:
+    """
+    특정 문항(question)과 연결된 프로젝트 정보를 기반으로 사용자의 모든 경험을 유사도 점수와 함께 반환합니다.
+
+    - **question_id**: 문항 ID (UUID)
+
+    문항 내용과 프로젝트(회사, 직무, 채용공고) 정보를 결합하여 임베딩을 생성하고,
+    사용자의 모든 경험과 비교하여 유사도 점수를 계산합니다.
+    결과는 유사도가 높은 순서로 정렬되어 반환됩니다.
+    """
+    results = await service.get_experiences_with_question_similarity(
+        client=qdrant_client,
+        session=session,
+        user_id=str(current_user.id),
+        question_id=question_id,
+    )
+
+    experiences_with_scores = [
+        ExperienceWithQuestionSimilarity(
+            experience=ExperienceRead(**exp.model_dump()),
+            similarity_score=score,
+        )
+        for exp, score in results
+    ]
+
+    return ExperienceQuestionMatchResult(
+        experiences=experiences_with_scores,
+        total=len(experiences_with_scores),
     )
