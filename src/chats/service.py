@@ -25,7 +25,7 @@ async def create_user_chat(
         question_id=question.id,
         project_id=question.project_id,
         user_id=question.user_id,
-        role=ChatRole.USER,
+        role=ChatRole.user,
         content=content,
         experience_ids=experience_ids
     )
@@ -50,7 +50,7 @@ async def create_assistant_chat(
         question_id=question.id,
         project_id=question.project_id,
         user_id=question.user_id,
-        role=ChatRole.ASSISTANT,
+        role=ChatRole.assistant,
         content=content,
         experience_ids=experience_ids,
         is_draft=is_draft
@@ -277,7 +277,7 @@ async def update_question_answer(
     chat_result = await db.execute(chat_stmt)
     chat = chat_result.scalar_one_or_none()
 
-    if not chat or chat.role != ChatRole.ASSISTANT or not chat.is_draft:
+    if not chat or chat.role != ChatRole.assistant or not chat.is_draft:
         return None
 
     # 2. Question 조회 및 answer 업데이트

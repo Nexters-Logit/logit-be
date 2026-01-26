@@ -38,9 +38,9 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
 
         self._messages = []
         for msg in db_messages:
-            if msg.role == ChatRole.USER:
+            if msg.role == ChatRole.user:
                 self._messages.append(HumanMessage(content=msg.content))
-            elif msg.role == ChatRole.ASSISTANT:
+            elif msg.role == ChatRole.assistant:
                 self._messages.append(AIMessage(content=msg.content))
 
         return self._messages

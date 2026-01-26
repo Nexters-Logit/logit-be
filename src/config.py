@@ -118,7 +118,7 @@ class Settings(BaseSettings):
     OPENAI_TEMPERATURE: float = 0.7
 
     # Chat Rate Limit
-    CHAT_DAILY_LIMIT: int = 15  # 일일 채팅 제한 횟수
+    CHAT_DAILY_LIMIT: int = 10  # 일일 채팅 제한 횟수
 
     @model_validator(mode="after")
     def _enforce_non_default_secrets(self) -> Self:

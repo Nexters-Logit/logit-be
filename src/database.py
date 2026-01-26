@@ -2,6 +2,7 @@ from collections.abc import AsyncGenerator
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -68,3 +69,31 @@ def init_qdrant_collection() -> None:
         print(f"Created Qdrant collection: {settings.QDRANT_COLLECTION_NAME}")
     else:
         print(f"Qdrant collection already exists: {settings.QDRANT_COLLECTION_NAME}")
+
+
+# Redis client (singleton)
+_redis_client: Redis | None = None
+
+
+async def get_redis() -> Redis:
+    """
+    Get Redis client instance (singleton).
+    """
+    global _redis_client
+    if _redis_client is None:
+        _redis_client = Redis.from_url(
+            settings.REDIS_URL,
+            encoding="utf-8",
+            decode_responses=True,
+        )
+    return _redis_client
+
+
+async def close_redis() -> None:
+    """
+    Close Redis connection.
+    """
+    global _redis_client
+    if _redis_client is not None:
+        await _redis_client.close()
+        _redis_client = None
