@@ -212,7 +212,7 @@ SEND_CHAT_SWAGGER = {
                     "examples": {
                         "streaming": {
                             "summary": "스트리밍 응답 예시",
-                            "value": 'data: {"type": "content", "content": "Cardify"}\n\ndata: {"type": "content", "content": " 프로젝트에서"}\n\ndata: {"type": "content", "content": " 협업을 통해..."}\n\ndata: {"type": "done", "chat_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", "is_draft": true}\n\n'
+                            "value": 'data: {"type": "content", "content": "Cardify"}\n\ndata: {"type": "content", "content": " 프로젝트에서"}\n\ndata: {"type": "content", "content": " 협업을 통해..."}\n\ndata: {"type": "done", "chat_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", "is_draft": true, "remaining_chats": 9}\n\n'
                         },
                         "error": {
                             "summary": "에러 응답 예시",
@@ -265,6 +265,19 @@ SEND_CHAT_SWAGGER = {
                                     }
                                 ]
                             }
+                        }
+                    }
+                }
+            },
+        },
+        status.HTTP_429_TOO_MANY_REQUESTS: {
+            "description": "일일 채팅 제한 초과",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": {
+                            "message": "일일 채팅 제한을 초과했습니다.",
+                            "remaining": 0
                         }
                     }
                 }
