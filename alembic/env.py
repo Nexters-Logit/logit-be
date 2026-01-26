@@ -1,24 +1,25 @@
+import asyncio
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
 from sqlalchemy import pool
+from sqlalchemy.engine import Connection
+from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlmodel import SQLModel
 
 from alembic import context
 
 # Import all models to ensure they are registered with SQLModel
 from src.users.models import User  # noqa: F401
+from src.projects.models import Project  # noqa: F401
+from src.questions.models import Question  # noqa: F401
+from src.chats.models import Chat  # noqa: F401
 from src.config import settings
 
 # this is the Alembic Config object
 config = context.config
 
-# Set the SQLAlchemy URL from settings
-# Replace asyncpg with psycopg2 for sync migrations
-sync_database_url = str(settings.SQLALCHEMY_DATABASE_URI).replace(
-    "postgresql+asyncpg", "postgresql+psycopg2"
-)
-config.set_main_option("sqlalchemy.url", sync_database_url)
+# Set the SQLAlchemy URL from settings (use async URL)
+config.set_main_option("sqlalchemy.url", str(settings.SQLALCHEMY_DATABASE_URI))
 
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:
@@ -51,26 +52,32 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def run_migrations_online() -> None:
+def do_run_migrations(connection: Connection) -> None:
+    context.configure(connection=connection, target_metadata=target_metadata)
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+async def run_migrations_online() -> None:
     """Run migrations in 'online' mode.
 
     In this scenario we need to create an Engine
     and associate a connection with the context.
     """
-    connectable = engine_from_config(
+    connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
 
-    with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+    async with connectable.connect() as connection:
+        await connection.run_sync(do_run_migrations)
 
-        with context.begin_transaction():
-            context.run_migrations()
+    await connectable.dispose()
 
 
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    run_migrations_online()
+    asyncio.run(run_migrations_online())

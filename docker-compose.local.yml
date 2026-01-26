@@ -24,6 +24,8 @@ services:
       # Qdrant
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
+      # Environment (local로 설정)
+      - ENVIRONMENT=local
     depends_on:
       postgres:
         condition: service_healthy
