@@ -35,7 +35,7 @@ GET /projects/chats/{question_id}?cursor=1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed&si
 - 채팅 메시지 목록 (시간순 정렬)
 
 **각 메시지 정보:**
-- role: "user" 또는 "ai"
+- role: "user" 또는 "assistant"
 - content: 메시지 내용
 - is_draft: 자기소개서 초안 여부
 
@@ -65,7 +65,7 @@ GET /projects/chats/{question_id}?cursor=1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed&si
                                     },
                                     {
                                         "id": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
-                                        "role": "ai",
+                                        "role": "assistant",
                                         "content": "Cardify 프로젝트에서...",
                                         "is_draft": True,
                                         "created_at": "2026-01-20T10:00:05Z"
