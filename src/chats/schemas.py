@@ -69,7 +69,7 @@ class ChatHistoryItem(BaseModel):
     """개별 채팅 메시지"""
 
     id: UUID
-    role: str  # "user" or "ai"
+    role: str  # "user" or "assistant"
     content: str
     is_draft: bool
     created_at: datetime
@@ -113,7 +113,7 @@ class ChatHistoryResponse(BaseModel):
                         },
                         {
                             "id": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
-                            "role": "ai",
+                            "role": "assistant",
                             "content": "Cardify 프로젝트에서...",
                             "is_draft": True,
                             "created_at": "2026-01-20T10:00:05Z"

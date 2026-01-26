@@ -50,7 +50,7 @@ async def create_assistant_chat(
         question_id=question.id,
         project_id=question.project_id,
         user_id=question.user_id,
-        role=ChatRole.ai,
+        role=ChatRole.assistant,
         content=content,
         experience_ids=experience_ids,
         is_draft=is_draft
@@ -79,6 +79,7 @@ async def send_chat_stream(
     content: str,
     experience_ids: list[str] | None = None,
     user_id: UUID,
+    remaining_chats: int | None = None,
 ) -> AsyncGenerator[str, None]:
     """메시지 전송 및 AI 응답 스트리밍"""
 
@@ -141,12 +142,14 @@ async def send_chat_stream(
             )
 
             # 7. 완료 이벤트 전송
-            done_data = json.dumps({
+            done_data = {
                 "type": "done",
                 "chat_id": str(ai_chat.id),
-                "is_draft": is_draft
-            }, ensure_ascii=False)
-            yield f"data: {done_data}\n\n"
+                "is_draft": is_draft,
+            }
+            if remaining_chats is not None:
+                done_data["remaining_chats"] = remaining_chats
+            yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
 
         elif chunk_data["type"] == "error":
             yield f"data: {chunk_json}\n\n"
@@ -277,7 +280,7 @@ async def update_question_answer(
     chat_result = await db.execute(chat_stmt)
     chat = chat_result.scalar_one_or_none()
 
-    if not chat or chat.role != ChatRole.ai or not chat.is_draft:
+    if not chat or chat.role != ChatRole.assistant or not chat.is_draft:
         return None
 
     # 2. Question 조회 및 answer 업데이트

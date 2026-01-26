@@ -11,7 +11,7 @@ class ChatRole(str, Enum):
     """Chat role types."""
 
     user = "user"
-    ai = "ai"
+    assistant = "assistant"
 
 
 class Chat(SQLModel, table=True):

@@ -74,7 +74,7 @@ def upgrade() -> None:
     sa.Column('project_id', sa.Uuid(), nullable=False),
     sa.Column('question_id', sa.Uuid(), nullable=False),
     sa.Column('user_id', sa.Uuid(), nullable=False),
-    sa.Column('role', sa.Enum('user', 'ai', name='chatrole'), nullable=False),
+    sa.Column('role', sa.Enum('user', 'assistant', name='chatrole'), nullable=False),
     sa.Column('content', sa.Text(), nullable=False),
     sa.Column('experience_ids', sa.ARRAY(sa.String()), nullable=True),
     sa.Column('is_draft', sa.Boolean(), nullable=False),

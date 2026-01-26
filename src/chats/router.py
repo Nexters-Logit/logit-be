@@ -1,11 +1,12 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
 from .schemas import ChatRequest, ChatHistoryResponse, UpdateAnswerResponse
 from .service import send_chat_stream, get_chat_history_response, update_question_answer
 from .swagger import SEND_CHAT_SWAGGER, GET_CHAT_HISTORY_SWAGGER, UPDATE_ANSWER_SWAGGER
+from .dependencies import RateLimiterDep
 from src.users.dependencies import ActiveUser, SessionDep
 from src.experience.dependencies import QdrantDep
 
@@ -22,8 +23,24 @@ async def send_chat(
     session: SessionDep,
     qdrant: QdrantDep,
     current_user: ActiveUser,
+    rate_limiter: RateLimiterDep,
 ):
     """메시지 전송 API (SSE 스트리밍)"""
+
+    # 레이트 리밋 체크
+    allowed, _ = await rate_limiter.check_limit(current_user.id)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "message": "일일 채팅 제한을 초과했습니다.",
+                "remaining": 0,
+            }
+        )
+
+    # 채팅 횟수 증가 및 잔여 횟수 조회
+    await rate_limiter.increment(current_user.id)
+    remaining_chats = await rate_limiter.get_remaining(current_user.id)
 
     return StreamingResponse(
         send_chat_stream(
@@ -33,6 +50,7 @@ async def send_chat(
             content=data.content,
             experience_ids=data.experience_ids,
             user_id=current_user.id,
+            remaining_chats=remaining_chats,
         ),
         media_type="text/event-stream",
         headers={
