@@ -1,75 +1,42 @@
 """User schemas."""
 
 from datetime import datetime
-from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from sqlmodel import SQLModel
 
 from src.users.models import OAuthProvider
 
 
-class UserBase(BaseModel):
+class UserBase(SQLModel):
     """Base user properties."""
 
-    email: str = Field(..., description="사용자 이메일")
-    full_name: str | None = Field(None, description="사용자 이름")
+    email: str
+    full_name: str | None = None
 
 
 class UserCreate(UserBase):
-    """Schema for creating a user (OAuth only)."""
+    """Schema for creating a user."""
 
-    is_active: bool = Field(default=True, description="활성 상태")
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "email": "user@example.com",
-                "full_name": "홍길동",
-                "is_active": True,
-            }
-        }
-    )
+    password: str | None = None
+    is_active: bool = True
 
 
-class UserUpdate(BaseModel):
+class UserUpdate(SQLModel):
     """Schema for updating a user."""
 
-    email: str | None = Field(None, description="사용자 이메일")
-    full_name: str | None = Field(None, description="사용자 이름")
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "email": "newemail@example.com",
-                "full_name": "김철수",
-            }
-        }
-    )
+    email: str | None = None
+    full_name: str | None = None
+    password: str | None = None
 
 
 class UserPublic(UserBase):
     """Schema for user public data."""
 
-    id: UUID = Field(..., description="사용자 ID")
-    oauth_provider: OAuthProvider | None = Field(None, description="OAuth 제공자 (google, apple)")
-    profile_image_url: str | None = Field(None, description="프로필 이미지 URL")
-    created_at: datetime = Field(..., description="가입 시간")
-    is_active: bool = Field(..., description="활성 상태")
-
-    model_config = ConfigDict(
-        from_attributes=True,
-        json_schema_extra={
-            "example": {
-                "id": "123e4567-e89b-12d3-a456-426614174000",
-                "email": "user@example.com",
-                "full_name": "홍길동",
-                "oauth_provider": "google",
-                "profile_image_url": "https://example.com/profile.jpg",
-                "created_at": "2024-06-15T10:00:00Z",
-                "is_active": True,
-            }
-        },
-    )
+    id: int
+    oauth_provider: OAuthProvider | None = None
+    profile_image_url: str | None = None
+    created_at: datetime
+    is_active: bool
 
 
 # Re-export OAuthProvider for convenience

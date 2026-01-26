@@ -1,14 +1,14 @@
 """User dependencies for dependency injection."""
 
+from collections.abc import Generator
 from typing import Annotated
-from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import Session
 
 from src.config import settings
-from src.database import get_async_db
+from src.database import engine
 from src.security import verify_token
 from src.users import service
 from src.users.models import User
@@ -17,8 +17,19 @@ from src.users.models import User
 reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 
 
-async def get_current_user(
-    session: Annotated[AsyncSession, Depends(get_async_db)],
+def get_db() -> Generator[Session, None, None]:
+    """
+    Database session dependency.
+
+    FastAPI의 Dependency Injection 패턴입니다.
+    엔드포인트에서 session: SessionDep로 사용합니다.
+    """
+    with Session(engine) as session:
+        yield session
+
+
+def get_current_user(
+    session: Annotated[Session, Depends(get_db)],
     token: Annotated[str, Depends(reusable_oauth2)],
 ) -> User:
     """
@@ -43,7 +54,7 @@ async def get_current_user(
         )
 
     # Get user from database
-    user = await service.get_user_by_id(session=session, user_id=UUID(user_id))
+    user = service.get_user_by_id(session=session, user_id=int(user_id))
 
     if not user:
         raise HTTPException(
@@ -60,7 +71,7 @@ async def get_current_user(
     return user
 
 
-async def get_current_active_user(
+def get_current_active_user(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
     """
@@ -76,6 +87,6 @@ async def get_current_active_user(
 
 
 # Type aliases for easier use in endpoints
-SessionDep = Annotated[AsyncSession, Depends(get_async_db)]
+SessionDep = Annotated[Session, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 ActiveUser = Annotated[User, Depends(get_current_active_user)]

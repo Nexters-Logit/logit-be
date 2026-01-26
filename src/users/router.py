@@ -1,93 +1,72 @@
-"""사용자 API 엔드포인트"""
-
-from uuid import UUID
+"""User router - User management endpoints."""
 
 from fastapi import APIRouter, HTTPException, status
 
-from src.common.responses import RESPONSES_CRUD_WITH_AUTH
 from src.users import schemas, service
 from src.users.dependencies import ActiveUser, SessionDep
 
 router = APIRouter()
 
 
-@router.get(
-    "/me",
-    response_model=schemas.UserPublic,
-    responses=RESPONSES_CRUD_WITH_AUTH,
-    summary="현재 사용자 정보 조회",
-)
+@router.get("/me", response_model=schemas.UserPublic)
 async def get_current_user_info(current_user: ActiveUser):
     """
-    현재 로그인한 사용자의 정보를 조회합니다.
+    Get current authenticated user's information.
 
-    - Authorization 헤더의 JWT 토큰에서 사용자 정보를 추출합니다.
+    FastAPI의 Dependency Injection을 사용한 인증:
+    'current_user: ActiveUser'가 자동으로:
+    1. Authorization 헤더에서 JWT 토큰 추출
+    2. 토큰 검증
+    3. 데이터베이스에서 사용자 조회
+    4. 활성 상태 확인
+    5. User 객체 반환
+
+    NestJS의 @CurrentUser() 데코레이터와 동일한 역할.
     """
     return current_user
 
 
-@router.patch(
-    "/me",
-    response_model=schemas.UserPublic,
-    responses=RESPONSES_CRUD_WITH_AUTH,
-    summary="현재 사용자 정보 수정",
-)
+@router.patch("/me", response_model=schemas.UserPublic)
 async def update_current_user(
     session: SessionDep,
     current_user: ActiveUser,
     user_in: schemas.UserUpdate,
 ):
     """
-    현재 로그인한 사용자의 정보를 수정합니다.
-
-    - **user_in**: 수정할 필드 (부분 업데이트 지원)
+    Update current user's information.
     """
-    user = await service.update_user(session=session, db_user=current_user, user_in=user_in)
+    user = service.update_user(session=session, db_user=current_user, user_in=user_in)
     return user
 
 
-@router.delete(
-    "/me",
-    status_code=status.HTTP_204_NO_CONTENT,
-    responses=RESPONSES_CRUD_WITH_AUTH,
-    summary="현재 사용자 계정 삭제",
-)
+@router.delete("/me")
 async def delete_current_user(
     session: SessionDep,
     current_user: ActiveUser,
 ):
     """
-    현재 로그인한 사용자의 계정을 삭제합니다.
-
-    - is_active 플래그를 False로 설정하는 soft delete 방식으로 처리됩니다.
+    Delete current user's account.
     """
-    await service.delete_user(session=session, user_id=current_user.id)
-    return None
+    service.delete_user(session=session, user_id=current_user.id)
+    return {"message": "User successfully deleted"}
 
 
-@router.get(
-    "/{user_id}",
-    response_model=schemas.UserPublic,
-    responses=RESPONSES_CRUD_WITH_AUTH,
-    summary="특정 사용자 정보 조회",
-)
+@router.get("/{user_id}", response_model=schemas.UserPublic)
 async def get_user_by_id(
     session: SessionDep,
     current_user: ActiveUser,
-    user_id: UUID,
+    user_id: int,
 ):
     """
-    특정 사용자의 정보를 ID로 조회합니다.
-
-    - **user_id**: 조회할 사용자의 UUID
-    - 사용자를 찾을 수 없는 경우 404 에러를 반환합니다.
+    Get user by ID.
+    Requires authentication.
     """
-    user = await service.get_user_by_id(session=session, user_id=user_id)
+    user = service.get_user_by_id(session=session, user_id=user_id)
 
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found.",
+            detail="User not found",
         )
 
     return user

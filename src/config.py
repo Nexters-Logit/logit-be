@@ -34,27 +34,12 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "Logit API"
     VERSION: str = "1.0.0"
-    ENVIRONMENT: Literal["local", "dev", "production"] = "local"
+    ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
-    # Docs Authentication (for dev environment)
-    DOCS_USERNAME: str = "admin"
-    DOCS_PASSWORD: str = "admin"  # Override in .env for dev
-
-    # Security - JWT Token Settings
+    # Security
     SECRET_KEY: str  # Must be set in .env!
-
-    # Access token: short-lived
-    # - Web: 15-30 minutes (requires frequent refresh)
-    # - Mobile: 1-24 hours (better UX, acceptable for mobile apps)
-    # Can be overridden in .env: ACCESS_TOKEN_EXPIRE_MINUTES=60
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30  # 30 minutes default
-
-    # Refresh token: long-lived but rotated on each use
-    # - OAuth 2.0 BCP recommends rotation for security
-    # - Longer expiry is safer with rotation (prevents session loss)
-    # Can be overridden in .env: REFRESH_TOKEN_EXPIRE_DAYS=60
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 30  # 30 days default
-
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30  # 30 days
     ALGORITHM: str = "HS256"
 
     # CORS
@@ -64,13 +49,9 @@ class Settings(BaseSettings):
     @computed_field
     @property
     def all_cors_origins(self) -> list[str]:
-        origins = [str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS] + [
+        return [str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS] + [
             self.FRONTEND_HOST
         ]
-        # dev 환경에서는 localhost:3000도 허용 (프론트 로컬 개발용)
-        if self.ENVIRONMENT == "dev" and "http://localhost:3000" not in origins:
-            origins.append("http://localhost:3000")
-        return origins
 
     # Database - PostgreSQL
     POSTGRES_SERVER: str
@@ -82,7 +63,6 @@ class Settings(BaseSettings):
     @computed_field
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> PostgresDsn:
-        """Async database URI (for future async operations)."""
         return PostgresDsn.build(
             scheme="postgresql+asyncpg",
             username=self.POSTGRES_USER,
@@ -114,11 +94,6 @@ class Settings(BaseSettings):
 
     # OpenAI (for Langchain)
     OPENAI_API_KEY: str | None = None
-    OPENAI_MODEL: str = "gpt-4o-mini"
-    OPENAI_TEMPERATURE: float = 0.7
-
-    # Chat Rate Limit
-    CHAT_DAILY_LIMIT: int = 10  # 일일 채팅 제한 횟수
 
     @model_validator(mode="after")
     def _enforce_non_default_secrets(self) -> Self:

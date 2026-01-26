@@ -8,10 +8,6 @@ services:
     command: fastapi dev src/main.py --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"
-    volumes:
-      - ./src:/app/src
-      - ./alembic:/app/alembic
-      - ./scripts:/app/scripts
     env_file:
       - .env
     environment:
@@ -30,7 +26,7 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
     networks:
       - logit-network
     develop:
@@ -62,7 +58,7 @@ services:
     networks:
       - logit-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U logit -d logit_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -96,12 +92,6 @@ services:
       - qdrant_data:/qdrant/storage
     networks:
       - logit-network
-    healthcheck:
-      test: ["CMD-SHELL", "timeout 10s bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
 
 volumes:
   postgres_data:
