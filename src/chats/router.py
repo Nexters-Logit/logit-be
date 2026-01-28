@@ -38,10 +38,6 @@ async def send_chat(
             }
         )
 
-    # 채팅 횟수 증가 및 잔여 횟수 조회
-    await rate_limiter.increment(current_user.id)
-    remaining_chats = await rate_limiter.get_remaining(current_user.id)
-
     return StreamingResponse(
         send_chat_stream(
             db=session,
@@ -50,7 +46,7 @@ async def send_chat(
             content=data.content,
             experience_ids=data.experience_ids,
             user_id=current_user.id,
-            remaining_chats=remaining_chats,
+            rate_limiter=rate_limiter,
         ),
         media_type="text/event-stream",
         headers={
