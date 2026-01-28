@@ -170,7 +170,8 @@ async def get_chat_history_response(
     question_id: UUID,
     user_id: UUID,
     cursor: str | None = None,
-    size: int = 20
+    size: int = 20,
+    remaining_chats: int = 0,
 ) -> ChatHistoryResponse | None:
     """채팅 히스토리 조회 (Cursor 기반 페이지네이션)"""
 
@@ -264,7 +265,8 @@ async def get_chat_history_response(
         ],
         experience_ids=latest_experience_ids,
         next_cursor=next_cursor,
-        has_more=has_more
+        has_more=has_more,
+        remaining_chats=remaining_chats,
     )
 
 

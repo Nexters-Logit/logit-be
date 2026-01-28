@@ -69,6 +69,7 @@ async def get_chat_messages(
     question_id: UUID,
     session: SessionDep,
     current_user: ActiveUser,
+    rate_limiter: RateLimiterDep,
     cursor: str | None = Query(
         default=None,
         description="다음 페이지 조회용 cursor (이전 응답의 next_cursor 값)"
@@ -82,8 +83,11 @@ async def get_chat_messages(
 ):
     """채팅 히스토리 조회 API"""
 
+    remaining_chats = await rate_limiter.get_remaining(current_user.id)
+
     response = await get_chat_history_response(
-        session, question_id, current_user.id, cursor=cursor, size=size
+        session, question_id, current_user.id,
+        cursor=cursor, size=size, remaining_chats=remaining_chats
     )
 
     if not response:
