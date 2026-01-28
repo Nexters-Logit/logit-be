@@ -38,10 +38,6 @@ async def send_chat(
             }
         )
 
-    # 채팅 횟수 증가 및 잔여 횟수 조회
-    await rate_limiter.increment(current_user.id)
-    remaining_chats = await rate_limiter.get_remaining(current_user.id)
-
     return StreamingResponse(
         send_chat_stream(
             db=session,
@@ -50,7 +46,7 @@ async def send_chat(
             content=data.content,
             experience_ids=data.experience_ids,
             user_id=current_user.id,
-            remaining_chats=remaining_chats,
+            rate_limiter=rate_limiter,
         ),
         media_type="text/event-stream",
         headers={
@@ -69,6 +65,7 @@ async def get_chat_messages(
     question_id: UUID,
     session: SessionDep,
     current_user: ActiveUser,
+    rate_limiter: RateLimiterDep,
     cursor: str | None = Query(
         default=None,
         description="다음 페이지 조회용 cursor (이전 응답의 next_cursor 값)"
@@ -82,8 +79,11 @@ async def get_chat_messages(
 ):
     """채팅 히스토리 조회 API"""
 
+    remaining_chats = await rate_limiter.get_remaining(current_user.id)
+
     response = await get_chat_history_response(
-        session, question_id, current_user.id, cursor=cursor, size=size
+        session, question_id, current_user.id,
+        cursor=cursor, size=size, remaining_chats=remaining_chats
     )
 
     if not response:

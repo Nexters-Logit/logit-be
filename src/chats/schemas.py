@@ -94,6 +94,9 @@ class ChatHistoryResponse(BaseModel):
         default=False,
         description="더 많은 데이터가 있는지 여부"
     )
+    remaining_chats: int = Field(
+        description="오늘 남은 채팅 횟수"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -123,7 +126,8 @@ class ChatHistoryResponse(BaseModel):
                         "7c9e6679-7425-40de-944b-e07fc1f90ae7"
                     ],
                     "next_cursor": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
-                    "has_more": True
+                    "has_more": True,
+                    "remaining_chats": 8
                 }
             ]
         }

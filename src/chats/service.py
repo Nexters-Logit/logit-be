@@ -9,6 +9,7 @@ from sqlmodel import select
 from .models import Chat, ChatRole
 from .schemas import ChatHistoryResponse, ChatHistoryItem, UpdateAnswerResponse
 from .llm_service import generate_ai_response_stream, classify_draft_intent
+from .rate_limit import ChatRateLimiter
 from src.questions.models import Question
 from src.projects.models import Project
 
@@ -79,7 +80,7 @@ async def send_chat_stream(
     content: str,
     experience_ids: list[str] | None = None,
     user_id: UUID,
-    remaining_chats: int | None = None,
+    rate_limiter: ChatRateLimiter | None = None,
 ) -> AsyncGenerator[str, None]:
     """메시지 전송 및 AI 응답 스트리밍"""
 
@@ -141,14 +142,16 @@ async def send_chat_stream(
                 experience_ids=experience_ids,
             )
 
-            # 7. 완료 이벤트 전송
+            # 7. 스트리밍 완료 후 채팅 횟수 증가
             done_data = {
                 "type": "done",
                 "chat_id": str(ai_chat.id),
                 "is_draft": is_draft,
             }
-            if remaining_chats is not None:
-                done_data["remaining_chats"] = remaining_chats
+            if rate_limiter:
+                await rate_limiter.increment(user_id)
+                remaining = await rate_limiter.get_remaining(user_id)
+                done_data["remaining_chats"] = remaining
             yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
 
         elif chunk_data["type"] == "error":
@@ -170,7 +173,8 @@ async def get_chat_history_response(
     question_id: UUID,
     user_id: UUID,
     cursor: str | None = None,
-    size: int = 20
+    size: int = 20,
+    remaining_chats: int = 0,
 ) -> ChatHistoryResponse | None:
     """채팅 히스토리 조회 (Cursor 기반 페이지네이션)"""
 
@@ -264,7 +268,8 @@ async def get_chat_history_response(
         ],
         experience_ids=latest_experience_ids,
         next_cursor=next_cursor,
-        has_more=has_more
+        has_more=has_more,
+        remaining_chats=remaining_chats,
     )
 
 
@@ -283,7 +288,11 @@ async def update_question_answer(
     if not chat or chat.role != ChatRole.assistant or not chat.is_draft:
         return None
 
-    # 2. Question 조회 및 answer 업데이트
+    # 2. 소유자 검증
+    if chat.user_id != user_id:
+        return None
+
+    # 3. Question 조회 및 answer 업데이트
     question = await get_question_by_id(db, chat.question_id)
     if not question:
         return None

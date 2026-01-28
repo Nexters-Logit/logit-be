@@ -41,6 +41,7 @@ GET /projects/chats/{question_id}?cursor=1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed&si
 
 **추가 반환 정보:**
 - experience_ids: 최근 선택된 경험 ID 목록 (응답 최상위)
+- remaining_chats: 남은 채팅 횟수
 """,
     "responses": {
         status.HTTP_200_OK: {
@@ -73,14 +74,15 @@ GET /projects/chats/{question_id}?cursor=1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed&si
                                 ],
                                 "experience_ids": ["7c9e6679-7425-40de-944b-e07fc1f90ae7"],
                                 "next_cursor": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-                                "has_more": True
+                                "has_more": True,
+                                "remaining_chats": 8
                             }
                         },
                         "last_page": {
                             "summary": "마지막 페이지",
                             "value": {
                                 "project_name": "네이버_백엔드개발자",
-                                "created_at": "2026.01.20",
+                                "project_created_at": "2026-01-20T10:00:00Z",
                                 "question_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
                                 "question": "지원동기 및 향후 목표",
                                 "chats": [
@@ -94,7 +96,8 @@ GET /projects/chats/{question_id}?cursor=1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed&si
                                 ],
                                 "experience_ids": [],
                                 "next_cursor": None,
-                                "has_more": False
+                                "has_more": False,
+                                "remaining_chats": 10
                             }
                         }
                     }
