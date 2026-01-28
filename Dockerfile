@@ -28,7 +28,7 @@ ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 
 # Copy project files
-COPY ./pyproject.toml ./alembic.ini /app/
+COPY ./pyproject.toml ./alembic.ini ./logging.ini /app/
 
 # Install dependencies
 # Ref: https://docs.astral.sh/uv/guides/integration/docker/#intermediate-layers
