@@ -11,7 +11,6 @@ from src.config import settings
 # Create async database engine
 async_engine = create_async_engine(
     str(settings.SQLALCHEMY_DATABASE_URI),
-    echo=True,
     future=True,
 )
 
