@@ -46,7 +46,7 @@ def _format_experience(exp: Experience) -> str:
     """경험을 프롬프트용 텍스트로 변환"""
     return f"""### {exp.title}
 - 유형: {exp.experience_type}
-- 날짜: {exp.date}
+- 날짜: {exp.start_date} ~ {exp.end_date}
 - 상황(S): {exp.situation}
 - 과제(T): {exp.task}
 - 행동(A): {exp.action}
