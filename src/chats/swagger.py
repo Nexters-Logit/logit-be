@@ -41,6 +41,7 @@ GET /projects/chats/{question_id}?cursor=1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed&si
 
 **추가 반환 정보:**
 - experience_ids: 최근 선택된 경험 ID 목록 (응답 최상위)
+- remaining_chats: 남은 채팅 횟수
 """,
     "responses": {
         status.HTTP_200_OK: {
