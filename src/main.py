@@ -5,13 +5,16 @@ Inspired by fastapi-best-practices and Netflix Dispatch.
 """
 
 import secrets
+import logging
+from logging.config import fileConfig
 from contextlib import asynccontextmanager
+import time
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
-from fastapi.security import HTTPBasic, HTTPBasicCredentials, OAuth2PasswordBearer, SecurityScopes
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from src.auth import router as auth_router
 from src.config import settings
@@ -21,6 +24,10 @@ from src.projects import router as projects_router
 from src.questions import router as questions_router
 from src.users import router as users_router
 from src.chats import router as chats_router
+
+# Load logging configuration
+fileConfig('logging.ini', disable_existing_loggers=False)
+logger = logging.getLogger(__name__)
 
 # HTTP Basic Auth for docs
 security = HTTPBasic()
@@ -51,10 +58,12 @@ async def lifespan(app: FastAPI):
     Application lifespan events.
     Runs once on startup and cleanup on shutdown.
     """
+    logger.info("🚀 Starting up Logit-server...")
     # Startup: Initialize Qdrant collection
     init_qdrant_collection()
     yield
     # Shutdown: cleanup if needed
+    logger.info("👋 Shutting down Logit-server...")
 
 
 # Docs authentication required for dev environment
@@ -98,6 +107,26 @@ def custom_openapi():
     return app.openapi_schema
 
 app.openapi = custom_openapi
+
+@app.middleware("http")
+async def logging_middleware(request: Request, call_next):
+    """로그 미들웨어"""
+    start_time = time.time()
+    try:
+        response = await call_next(request)
+        process_time = (time.time() - start_time) * 1000
+        
+        logger.info(
+            f'"{request.method} {request.url.path}" {response.status_code} {process_time:.2f}ms'
+        )
+        return response
+    except Exception as e:
+        process_time = (time.time() - start_time) * 1000
+        logger.error(
+            f'"{request.method} {request.url.path}" 500 {process_time:.2f}ms - Error: {e}',
+            exc_info=True
+        )
+        raise
 
 if docs_auth_required:
     @app.get("/openapi.json", include_in_schema=False)
