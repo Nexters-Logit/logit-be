@@ -76,7 +76,7 @@ class Experience(ExperienceBase):
                 "action": "OpenAI API를 활용하여 RAG 기반 챗봇을 개발하고, FastAPI로 REST API를 구축했습니다.",
                 "result": "응답 시간을 70% 단축하고 고객 만족도를 85%로 향상시켰습니다.",
                 "category": "기술적 전문성",
-                "tags": "전문성, 문제해결력, 고객 이해력",
+                "tags": "AI/LLM, API연동, 백엔드",
                 "created_at": "2024-06-15T10:00:00Z",
                 "updated_at": "2024-06-15T10:00:00Z",
             }

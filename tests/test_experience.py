@@ -397,7 +397,7 @@ def test_search_experiences_success(
         "action": "Test",
         "result": "Test",
         "category": "기술적 전문성",
-        "tags": "전문성, 문제해결력",
+        "tags": "AI/LLM, 문제해결",
         "created_at": datetime.utcnow().isoformat(),
         "updated_at": datetime.utcnow().isoformat(),
     }
@@ -460,7 +460,7 @@ def test_get_other_user_experience_forbidden(
         "action": "Test",
         "result": "Test",
         "category": "기술적 전문성",
-        "tags": "전문성",
+        "tags": "리서치",
         "created_at": datetime.utcnow().isoformat(),
         "updated_at": datetime.utcnow().isoformat(),
     }
@@ -532,7 +532,7 @@ def test_get_experiences_by_question_success(
         "action": "Test",
         "result": "Test",
         "category": "기술적 전문성",
-        "tags": "전문성, 문제해결력",
+        "tags": "AI/LLM, 문제해결",
         "created_at": datetime.utcnow().isoformat(),
         "updated_at": datetime.utcnow().isoformat(),
     }
@@ -551,7 +551,7 @@ def test_get_experiences_by_question_success(
         "action": "Test",
         "result": "Test",
         "category": "기술적 전문성",
-        "tags": "전문성",
+        "tags": "백엔드",
         "created_at": datetime.utcnow().isoformat(),
         "updated_at": datetime.utcnow().isoformat(),
     }
