@@ -1,6 +1,9 @@
 import json
+import logging
 from typing import AsyncGenerator, List
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 from qdrant_client import QdrantClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +11,7 @@ from sqlmodel import select
 
 from .models import Chat, ChatRole
 from .schemas import ChatHistoryResponse, ChatHistoryItem, UpdateAnswerResponse
-from .llm_service import generate_ai_response_stream, classify_draft_intent
+from .llm_service import generate_ai_response_stream, classify_draft_response
 from .rate_limit import ChatRateLimiter
 from src.questions.models import Question
 from src.projects.models import Project
@@ -98,13 +101,7 @@ async def send_chat_stream(
         yield f"data: {json.dumps({'type': 'error', 'message': 'Project not found'}, ensure_ascii=False)}\n\n"
         return
 
-    # 3. 초안 여부 판단 (Function Calling) - 사용자 메시지 저장 전에 먼저 판단
-    try:
-        is_draft = await classify_draft_intent(content)
-    except Exception:
-        is_draft = False  # 판단 실패 시 기본값
-
-    # 4. 사용자 메시지 저장
+    # 3. 사용자 메시지 저장
     await create_user_chat(
         db=db,
         question=question,
@@ -112,7 +109,7 @@ async def send_chat_stream(
         experience_ids=experience_ids,
     )
 
-    # 5. AI 응답 스트리밍 (RunnableWithMessageHistory가 DB에서 히스토리 자동 로드)
+    # 4. AI 응답 스트리밍 (RunnableWithMessageHistory가 DB에서 히스토리 자동 로드)
     full_content = ""
     async for chunk_json in generate_ai_response_stream(
         db=db,
@@ -133,6 +130,14 @@ async def send_chat_stream(
             yield f"data: {chunk_json}\n\n"
 
         elif chunk_data["type"] == "done":
+            # 5. AI 응답 내용 기반 초안 여부 판단
+            try:
+                is_draft = await classify_draft_response(full_content)
+                logger.info(f"Draft classification result: {is_draft}")
+            except Exception as e:
+                logger.error(f"Draft classification failed: {e}")
+                is_draft = False  # 판단 실패 시 기본값
+
             # 6. AI 메시지 저장
             ai_chat = await create_assistant_chat(
                 db=db,

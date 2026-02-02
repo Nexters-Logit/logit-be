@@ -17,26 +17,27 @@ from .dependencies import LLMProvider, get_llm_provider
 
 # Function Calling 스키마 정의
 class DraftClassification(BaseModel):
-    """사용자 요청이 자기소개서 초안 작성 요청인지 판단"""
+    """AI 응답이 자기소개서 초안인지 판단"""
 
     is_draft: bool = Field(
-        description="자기소개서 초안 작성 요청이면 True, 아니면 False. "
-                    "True 예시: '써줘', '작성해줘', '만들어줘', '초안', '생성해줘' 등 / "
-                    "False 예시: 질문, 피드백 요청, 수정 요청, 일반 대화"
+        description="True: 채용 문항에 제출할 수 있는 자기소개서/지원동기/경험 서술 본문 (1인칭 서술체로 경험과 역량을 설명하는 글) / "
+                    "False: AI가 사용자에게 말하는 대화형 응답 (피드백, 제안, 설명, 질문 답변 등)"
     )
 
 
-async def classify_draft_intent(
-    user_message: str,
+async def classify_draft_response(
+    ai_response: str,
     llm_provider: LLMProvider | None = None
 ) -> bool:
-    """Function Calling으로 초안 작성 의도 판단"""
+    """Function Calling으로 AI 응답이 자기소개서 초안인지 판단"""
 
     provider = llm_provider or get_llm_provider()
     llm_with_structured = provider.classification_llm.with_structured_output(DraftClassification)
 
     result = await llm_with_structured.ainvoke(
-        f"다음 사용자 메시지가 자기소개서 초안 작성 요청인지 판단하세요:\n\n{user_message}"
+        "다음 텍스트가 채용 문항에 바로 제출할 수 있는 '자기소개서 본문'인지 판단하세요. "
+        "AI의 설명/피드백/제안이 아닌, 지원자의 경험과 역량을 서술한 완성된 글이면 True입니다.\n\n"
+        f"{ai_response}"
     )
 
     return result.is_draft

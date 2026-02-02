@@ -9,6 +9,7 @@ from .swagger import SEND_CHAT_SWAGGER, GET_CHAT_HISTORY_SWAGGER, UPDATE_ANSWER_
 from .dependencies import RateLimiterDep
 from src.users.dependencies import ActiveUser, SessionDep
 from src.experience.dependencies import QdrantDep
+from src.config import settings
 
 router = APIRouter()
 
@@ -27,16 +28,20 @@ async def send_chat(
 ):
     """메시지 전송 API (SSE 스트리밍)"""
 
+    # 테스트 계정은 레이트 리밋 면제
+    is_test_user = str(current_user.id) in settings.TEST_USER_IDS
+
     # 레이트 리밋 체크
-    allowed, _ = await rate_limiter.check_limit(current_user.id)
-    if not allowed:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={
-                "message": "일일 채팅 제한을 초과했습니다.",
-                "remaining": 0,
-            }
-        )
+    if not is_test_user:
+        allowed, _ = await rate_limiter.check_limit(current_user.id)
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={
+                    "message": "일일 채팅 제한을 초과했습니다.",
+                    "remaining": 0,
+                }
+            )
 
     return StreamingResponse(
         send_chat_stream(
