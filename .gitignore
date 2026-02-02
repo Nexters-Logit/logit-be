@@ -201,3 +201,5 @@ __marimo__/
 
 *.pem
 Caddyfile
+Caddyfile.prod
+.active-color

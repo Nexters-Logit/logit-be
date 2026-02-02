@@ -66,16 +66,20 @@ async def lifespan(app: FastAPI):
     logger.info("👋 Shutting down Logit-server...")
 
 
-# Docs authentication required for dev environment
+# Docs configuration per environment
+# - production: completely disabled (no openapi, docs, redoc)
+# - dev: protected with HTTP Basic Auth
+# - local: publicly accessible
+is_production = settings.ENVIRONMENT == "production"
 docs_auth_required = settings.ENVIRONMENT == "dev"
 
 # Initialize FastAPI app
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json", # Always define openapi_url
-    docs_url=None if docs_auth_required else "/docs",
-    redoc_url=None if docs_auth_required else "/redoc",
+    openapi_url=None if is_production else f"{settings.API_V1_STR}/openapi.json",
+    docs_url=None if (is_production or docs_auth_required) else "/docs",
+    redoc_url=None if (is_production or docs_auth_required) else "/redoc",
     description="Domain-Driven FastAPI with OAuth, JWT, and Modern Stack",
     lifespan=lifespan,
 )

@@ -87,6 +87,26 @@ lint: ## Lint code with ruff
 type-check: ## Type check with mypy
 	uv run mypy src/
 
+# Production Commands (Blue-Green Deployment)
+prod-init: ## First-time production setup (starts blue)
+	chmod +x scripts/deploy.sh
+	./scripts/deploy.sh init
+
+prod-deploy: ## Blue-green deploy to production
+	./scripts/deploy.sh deploy
+
+prod-rollback: ## Rollback production to previous version
+	./scripts/deploy.sh rollback
+
+prod-status: ## Show production deployment status
+	./scripts/deploy.sh status
+
+prod-logs: ## View production logs (follow mode)
+	docker compose -f docker-compose.prod.yml logs -f
+
+prod-down: ## Stop all production services
+	docker compose -f docker-compose.prod.yml down
+
 # Quick Start
 quick-start: build up ## Build and start all services
 	@echo "✅ Services started! Visit http://localhost:8000/docs"

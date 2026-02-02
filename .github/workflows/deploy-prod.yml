@@ -31,14 +31,13 @@ jobs:
             # Pull latest code
             git pull origin main
 
-            # Stop existing containers
-            docker compose down
-
-            # Rebuild and start containers
-            docker compose up -d --build
-
-            # Run migrations
-            docker compose exec -T app alembic upgrade head
+            # Blue-Green deployment
+            chmod +x scripts/deploy.sh
+            if [ ! -f .active-color ]; then
+              ./scripts/deploy.sh init
+            else
+              ./scripts/deploy.sh deploy
+            fi
 
             # Cleanup old images
             docker image prune -f
@@ -54,5 +53,7 @@ jobs:
           port: ${{ secrets.PROD_SERVER_PORT || 22 }}
           script: |
             sleep 10
-            curl -f http://localhost:8000/health || exit 1
+            cd ${{ secrets.PROD_APP_PATH }}
+            ./scripts/deploy.sh status
+            curl -f http://localhost:80/health || exit 1
             echo "✅ Health check passed!"
