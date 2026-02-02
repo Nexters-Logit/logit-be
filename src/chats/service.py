@@ -132,6 +132,7 @@ async def send_chat_stream(
         elif chunk_data["type"] == "done":
             # 5. AI 응답 내용 기반 초안 여부 판단
             try:
+                logger.info(f"AI response preview: {full_content[:200]}...")
                 is_draft = await classify_draft_response(full_content)
                 logger.info(f"Draft classification result: {is_draft}")
             except Exception as e:

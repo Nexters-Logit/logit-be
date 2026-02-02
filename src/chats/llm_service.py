@@ -17,11 +17,10 @@ from .dependencies import LLMProvider, get_llm_provider
 
 # Function Calling 스키마 정의
 class DraftClassification(BaseModel):
-    """AI 응답이 자기소개서 초안인지 판단"""
+    """텍스트가 자기소개서 초안인지 판단"""
 
     is_draft: bool = Field(
-        description="True: 채용 문항에 제출할 수 있는 자기소개서/지원동기/경험 서술 본문 (1인칭 서술체로 경험과 역량을 설명하는 글) / "
-                    "False: AI가 사용자에게 말하는 대화형 응답 (피드백, 제안, 설명, 질문 답변 등)"
+        description="지원자 관점에서 본인의 경험/역량을 서술한 글이면 True, AI가 사용자에게 말하는 글이면 False"
     )
 
 
@@ -35,9 +34,10 @@ async def classify_draft_response(
     llm_with_structured = provider.classification_llm.with_structured_output(DraftClassification)
 
     result = await llm_with_structured.ainvoke(
-        "다음 텍스트가 채용 문항에 바로 제출할 수 있는 '자기소개서 본문'인지 판단하세요. "
-        "AI의 설명/피드백/제안이 아닌, 지원자의 경험과 역량을 서술한 완성된 글이면 True입니다.\n\n"
-        f"{ai_response}"
+        "이 텍스트의 화자가 누구인지 판단하세요:\n"
+        "- 지원자가 본인의 경험을 서술하는 글 → True\n"
+        "- AI가 사용자에게 설명/제안/피드백하는 글 → False\n\n"
+        f"{ai_response[:500]}"
     )
 
     return result.is_draft
