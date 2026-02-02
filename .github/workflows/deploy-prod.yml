@@ -1,0 +1,59 @@
+name: Deploy to Production Server
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # 수동 배포 가능
+
+env:
+  DOCKER_IMAGE: logit-server
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production  # GitHub Environment로 승인 단계 추가 가능
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.PROD_SERVER_USER }}
+          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
+          port: ${{ secrets.PROD_SERVER_PORT || 22 }}
+          script: |
+            cd ${{ secrets.PROD_APP_PATH }}
+
+            # Pull latest code
+            git pull origin main
+
+            # Blue-Green deployment
+            chmod +x scripts/deploy.sh
+            if [ ! -f .active-color ]; then
+              ./scripts/deploy.sh init
+            else
+              ./scripts/deploy.sh deploy
+            fi
+
+            # Cleanup old images
+            docker image prune -f
+
+            echo "✅ Production deployment completed!"
+
+      - name: Health check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.PROD_SERVER_USER }}
+          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
+          port: ${{ secrets.PROD_SERVER_PORT || 22 }}
+          script: |
+            sleep 10
+            cd ${{ secrets.PROD_APP_PATH }}
+            ./scripts/deploy.sh status
+            curl -f http://localhost:80/health || exit 1
+            echo "✅ Health check passed!"
