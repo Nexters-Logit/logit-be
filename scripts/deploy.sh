@@ -207,7 +207,13 @@ rollback() {
     log_info "Starting app-${target}..."
     docker compose -f "$COMPOSE_FILE" up -d "app-${target}"
 
-    wait_for_healthy "$target"
+    if ! wait_for_healthy "$target"; then
+        log_error "Rollback failed! app-${target} is not healthy."
+        log_error "Current active (app-${active}) is still serving traffic."
+        log_error "Manual intervention required."
+        docker compose -f "$COMPOSE_FILE" logs --tail=50 "app-${target}"
+        exit 1
+    fi
 
     # Switch Caddy
     update_caddyfile "$target"
