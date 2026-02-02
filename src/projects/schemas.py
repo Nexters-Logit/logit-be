@@ -69,7 +69,7 @@ class ProjectListItem(BaseModel):
     company: str = Field(..., description="기업명")
     job_position: str = Field(..., description="직무")
     updated_at: datetime = Field(..., description="최근 활동일")
-    question_id: UUID = Field(..., description="문항 1번 ID")
+    question_id: UUID | None = Field(None, description="문항 1번 ID")
 
     model_config = ConfigDict(
         from_attributes=True,
