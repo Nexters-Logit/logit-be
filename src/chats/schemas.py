@@ -84,6 +84,10 @@ class ChatHistoryResponse(BaseModel):
     project_created_at: datetime
     question_id: UUID
     question: str
+    answer: str | None = Field(
+        default=None,
+        description="현재 저장된 자기소개서 답변 (업데이트한 답변)"
+    )
     chats: List[ChatHistoryItem]
     experience_ids: List[str] = []
     next_cursor: str | None = Field(
@@ -106,6 +110,7 @@ class ChatHistoryResponse(BaseModel):
                     "project_created_at": "2026-01-20T10:00:00Z",
                     "question_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
                     "question": "지원동기 및 향후 목표",
+                    "answer": "Cardify 프로젝트에서...",
                     "chats": [
                         {
                             "id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",

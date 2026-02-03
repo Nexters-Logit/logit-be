@@ -264,6 +264,7 @@ async def get_chat_history_response(
         project_created_at=project_created_at,
         question_id=question.id,
         question=question.question,
+        answer=question.answer,
         chats=[
             ChatHistoryItem(
                 id=msg.id,
