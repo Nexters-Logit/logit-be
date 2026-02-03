@@ -55,6 +55,7 @@ async def send_chat(
             experience_ids=data.experience_ids,
             user_id=current_user.id,
             rate_limiter=rate_limiter,
+            is_test_user=is_test_user,
         ),
         media_type="text/event-stream",
         headers={

@@ -84,6 +84,7 @@ async def send_chat_stream(
     experience_ids: list[str] | None = None,
     user_id: UUID,
     rate_limiter: ChatRateLimiter | None = None,
+    is_test_user: bool = False,
 ) -> AsyncGenerator[str, None]:
     """메시지 전송 및 AI 응답 스트리밍"""
 
@@ -146,16 +147,19 @@ async def send_chat_stream(
                 experience_ids=experience_ids,
             )
 
-            # 7. 스트리밍 완료 후 채팅 횟수 증가
+            # 7. 스트리밍 완료 후 채팅 횟수 증가 (테스트 유저는 면제)
             done_data = {
                 "type": "done",
                 "chat_id": str(ai_chat.id),
                 "is_draft": is_draft,
             }
             if rate_limiter:
-                await rate_limiter.increment(user_id)
-                remaining = await rate_limiter.get_remaining(user_id)
-                done_data["remaining_chats"] = remaining
+                if is_test_user:
+                    done_data["remaining_chats"] = -1  # 무제한
+                else:
+                    await rate_limiter.increment(user_id)
+                    remaining = await rate_limiter.get_remaining(user_id)
+                    done_data["remaining_chats"] = remaining
             yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
 
         elif chunk_data["type"] == "error":
