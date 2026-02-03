@@ -28,8 +28,11 @@ async def send_chat(
 ):
     """메시지 전송 API (SSE 스트리밍)"""
 
-    # 테스트 계정은 레이트 리밋 면제
-    is_test_user = str(current_user.id) in settings.TEST_USER_IDS
+    # 테스트 계정은 레이트 리밋 면제 (dev에서만)
+    is_test_user = (
+        settings.ENVIRONMENT == "dev"
+        and str(current_user.id) in settings.TEST_USER_IDS
+    )
 
     # 레이트 리밋 체크
     if not is_test_user:
