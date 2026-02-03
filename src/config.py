@@ -121,7 +121,7 @@ class Settings(BaseSettings):
     CHAT_DAILY_LIMIT: int = 10  # 일일 채팅 제한 횟수
 
     # Test User IDs (채팅 제한 면제)
-    TEST_USER_IDS: list[str] = ["00000000-0000-0000-0000-000000000001"]
+    TEST_USER_IDS: list[str] = []
 
     @model_validator(mode="after")
     def _enforce_non_default_secrets(self) -> Self:
