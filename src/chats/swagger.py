@@ -32,6 +32,7 @@ GET /projects/chats/{question_id}?cursor=1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed&si
 - 프로젝트명 (회사_채용유형)
 - 생성일
 - 문항 내용
+- 현재 저장된 자기소개서 답변 (answer)
 - 채팅 메시지 목록 (시간순 정렬)
 
 **각 메시지 정보:**
@@ -56,6 +57,7 @@ GET /projects/chats/{question_id}?cursor=1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed&si
                                 "project_created_at": "2026-01-20T10:00:00Z",
                                 "question_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
                                 "question": "지원동기 및 향후 목표",
+                                "answer": "Cardify 프로젝트에서...",
                                 "chats": [
                                     {
                                         "id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
@@ -85,6 +87,7 @@ GET /projects/chats/{question_id}?cursor=1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed&si
                                 "project_created_at": "2026-01-20T10:00:00Z",
                                 "question_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
                                 "question": "지원동기 및 향후 목표",
+                                "answer": None,
                                 "chats": [
                                     {
                                         "id": "abc12345-1234-5678-9abc-def012345678",

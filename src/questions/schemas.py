@@ -34,7 +34,7 @@ class QuestionUpdate(BaseModel):
             "example": {
                 "question": "지원 동기와 입사 후 포부를 작성해 주세요.",
                 "max_length": 800,
-                "answer": "저는 카카오에서 사용자 경험을 개선하고 싶습니다...",
+                "answer": "저는 카카오에서 사용자 경험을 개선하고 싶습니다..",
             }
         }
     )

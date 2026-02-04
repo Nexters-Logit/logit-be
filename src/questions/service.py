@@ -42,12 +42,14 @@ async def create_question(
     if not result.scalar():                                                                                                                                                                        
         raise HTTPException(status_code=404, detail="Project not found")
 
+    next_order = await get_next_order(session, project_id, user_id)
+
     db_question = Question(
         project_id=project_id,
         user_id=user_id,
         question=question_create.question,
         max_length=question_create.max_length,
-        order=question_create.order,
+        order=next_order,
     )
     session.add(db_question)
     await session.commit()

@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import AsyncGenerator, List
 from uuid import UUID
 
@@ -8,10 +9,12 @@ from sqlmodel import select
 
 from .models import Chat, ChatRole
 from .schemas import ChatHistoryResponse, ChatHistoryItem, UpdateAnswerResponse
-from .llm_service import generate_ai_response_stream, classify_draft_intent
+from .llm_service import generate_ai_response_stream, classify_draft_response
 from .rate_limit import ChatRateLimiter
 from src.questions.models import Question
 from src.projects.models import Project
+
+logger = logging.getLogger(__name__)
 
 
 async def create_user_chat(
@@ -81,6 +84,7 @@ async def send_chat_stream(
     experience_ids: list[str] | None = None,
     user_id: UUID,
     rate_limiter: ChatRateLimiter | None = None,
+    is_test_user: bool = False,
 ) -> AsyncGenerator[str, None]:
     """메시지 전송 및 AI 응답 스트리밍"""
 
@@ -98,13 +102,7 @@ async def send_chat_stream(
         yield f"data: {json.dumps({'type': 'error', 'message': 'Project not found'}, ensure_ascii=False)}\n\n"
         return
 
-    # 3. 초안 여부 판단 (Function Calling) - 사용자 메시지 저장 전에 먼저 판단
-    try:
-        is_draft = await classify_draft_intent(content)
-    except Exception:
-        is_draft = False  # 판단 실패 시 기본값
-
-    # 4. 사용자 메시지 저장
+    # 3. 사용자 메시지 저장
     await create_user_chat(
         db=db,
         question=question,
@@ -112,7 +110,7 @@ async def send_chat_stream(
         experience_ids=experience_ids,
     )
 
-    # 5. AI 응답 스트리밍 (RunnableWithMessageHistory가 DB에서 히스토리 자동 로드)
+    # 4. AI 응답 스트리밍 (RunnableWithMessageHistory가 DB에서 히스토리 자동 로드)
     full_content = ""
     async for chunk_json in generate_ai_response_stream(
         db=db,
@@ -133,6 +131,13 @@ async def send_chat_stream(
             yield f"data: {chunk_json}\n\n"
 
         elif chunk_data["type"] == "done":
+            # 5. AI 응답 내용 기반 초안 여부 판단
+            try:
+                is_draft = await classify_draft_response(full_content)
+            except Exception as e:
+                logger.warning(f"Draft classification failed: {e}")
+                is_draft = False  # 판단 실패 시 기본값
+
             # 6. AI 메시지 저장
             ai_chat = await create_assistant_chat(
                 db=db,
@@ -142,16 +147,19 @@ async def send_chat_stream(
                 experience_ids=experience_ids,
             )
 
-            # 7. 스트리밍 완료 후 채팅 횟수 증가
+            # 7. 스트리밍 완료 후 채팅 횟수 증가 (테스트 유저는 면제)
             done_data = {
                 "type": "done",
                 "chat_id": str(ai_chat.id),
                 "is_draft": is_draft,
             }
             if rate_limiter:
-                await rate_limiter.increment(user_id)
-                remaining = await rate_limiter.get_remaining(user_id)
-                done_data["remaining_chats"] = remaining
+                if is_test_user:
+                    done_data["remaining_chats"] = -1  # 무제한
+                else:
+                    await rate_limiter.increment(user_id)
+                    remaining = await rate_limiter.get_remaining(user_id)
+                    done_data["remaining_chats"] = remaining
             yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
 
         elif chunk_data["type"] == "error":
@@ -256,6 +264,7 @@ async def get_chat_history_response(
         project_created_at=project_created_at,
         question_id=question.id,
         question=question.question,
+        answer=question.answer,
         chats=[
             ChatHistoryItem(
                 id=msg.id,
