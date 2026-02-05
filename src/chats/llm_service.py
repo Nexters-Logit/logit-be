@@ -169,11 +169,18 @@ async def generate_ai_response_stream(
 
         # 허용된 사실 목록을 텍스트로 변환
         allowed_facts_text = ""
-        if content_plan.is_cover_letter_request and content_plan.allowed_facts:
-            allowed_facts_text = "\n".join(
-                f"- {fact.fact} (출처: {fact.source})"
-                for fact in content_plan.allowed_facts
-            )
+        if content_plan.is_cover_letter_request:
+            if content_plan.allowed_facts:
+                allowed_facts_text = "\n".join(
+                    f"- {fact.fact} (출처: {fact.source})"
+                    for fact in content_plan.allowed_facts
+                )
+            else:
+                # 자기소개서 요청인데 사실이 없으면 정보 요청 유도
+                allowed_facts_text = (
+                    "사용 가능한 사실 없음 - 경험 정보에서 구체적인 사실을 추출할 수 없습니다. "
+                    "자기소개서를 작성하지 말고, 사용자에게 더 구체적인 경험 정보를 요청하세요."
+                )
         else:
             allowed_facts_text = "제한 없음 (자기소개서 작성 요청이 아님)"
 
