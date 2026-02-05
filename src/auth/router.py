@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Form, HTTPException, status
 from fastapi.responses import RedirectResponse
 
 from src.auth import constants, schemas, service
@@ -84,6 +84,75 @@ async def google_callback(code: str, session: SessionDep):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
+
+
+@router.get(
+    "/apple",
+    summary="Apple OAuth 로그인",
+    responses={
+        307: {"description": "Apple 인증 페이지로 리디렉션"},
+        501: ERROR_501_NOT_IMPLEMENTED,
+    },
+)
+async def apple_login():
+    """
+    Apple OAuth 로그인 페이지로 리디렉션합니다.
+    """
+    if not settings.APPLE_CLIENT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Apple OAuth is not configured.",
+        )
+
+    apple_auth_url = (
+        f"{constants.APPLE_AUTH_URL}?"
+        f"client_id={settings.APPLE_CLIENT_ID}&"
+        f"redirect_uri={settings.APPLE_REDIRECT_URI}&"
+        f"response_type=code&"
+        f"response_mode=form_post&"
+        f"scope={constants.APPLE_SCOPES}"
+    )
+
+    return RedirectResponse(
+        url=apple_auth_url,
+    )
+
+
+@router.post(
+    "/apple/callback",
+    response_model=schemas.OAuthCallbackResponse,
+    summary="Apple OAuth 콜백 처리",
+    responses=create_responses(
+        {400: ERROR_400_BAD_REQUEST},
+        {501: ERROR_501_NOT_IMPLEMENTED},
+    ),
+)
+async def apple_callback(
+    code: str = Form(...),
+    user: str | None = Form(None),
+    session: SessionDep,
+):
+    """
+    Apple OAuth 콜백을 처리합니다.
+    Apple은 POST 방식으로 콜백을 보냅니다 (form_post).
+
+    - **code**: Apple로부터 받은 인증 코드
+    - **user**: Apple이 최초 로그인 시에만 보내주는 사용자 정보 (JSON string)
+    """
+    if not settings.APPLE_CLIENT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Apple OAuth is not configured.",
+        )
+
+    try:
+        return await service.apple_oauth_flow(code=code, user_json=user, session=session)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
 
 
 @router.post(

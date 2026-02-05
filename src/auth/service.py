@@ -1,8 +1,9 @@
 """Authentication service layer - OAuth and JWT logic."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
+import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth import constants
@@ -127,3 +128,144 @@ async def create_oauth_user(
     await session.commit()
     await session.refresh(db_obj)
     return db_obj
+
+
+def generate_apple_client_secret() -> str:
+    """
+    Generate Apple Client Secret (JWT).
+    Required to exchange authorization code for access token.
+    """
+    if (
+        not settings.APPLE_CLIENT_ID
+        or not settings.APPLE_TEAM_ID
+        or not settings.APPLE_KEY_ID
+        or not settings.APPLE_PRIVATE_KEY
+    ):
+        raise ValueError("Apple OAuth is not correctly configured locally.")
+
+    now = datetime.now(timezone.utc)
+    headers = {"kid": settings.APPLE_KEY_ID}
+    payload = {
+        "iss": settings.APPLE_TEAM_ID,
+        "iat": now,
+        "exp": now + timedelta(days=180),  # Max 6 months
+        "aud": "https://appleid.apple.com",
+        "sub": settings.APPLE_CLIENT_ID,
+    }
+
+    # The private key might be stored with literal \n characters in env
+    private_key = settings.APPLE_PRIVATE_KEY.replace("\\n", "\n")
+
+    return jwt.encode(payload, private_key, algorithm="ES256", headers=headers)
+
+
+async def apple_oauth_flow(
+    code: str, user_json: str | None, session: AsyncSession
+) -> OAuthCallbackResponse:
+    """
+    Complete Apple OAuth flow.
+
+    1. Generate client secret (ES256 JWT)
+    2. Exchange code for access token & ID token
+    3. Decode ID token to get email and sub (Apple ID)
+    4. Handle first-time login: extract name from user_json
+    5. Find or create user
+    """
+    client_secret = generate_apple_client_secret()
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            constants.APPLE_TOKEN_URL,
+            data={
+                "client_id": settings.APPLE_CLIENT_ID,
+                "client_secret": client_secret,
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": settings.APPLE_REDIRECT_URI,
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+        if response.status_code != 200:
+            error_details = response.text
+            raise ValueError(f"Failed to exchange code for token: {error_details}")
+
+        token_data = response.json()
+        id_token = token_data.get("id_token")
+
+        if not id_token:
+            raise ValueError("No id_token in response from Apple")
+
+        try:
+            decoded = jwt.decode(id_token, options={"verify_signature": False})
+        except Exception as e:
+            raise ValueError(f"Invalid id_token: {str(e)}")
+
+        apple_sub = decoded.get("sub")
+        email = decoded.get("email")
+
+        if not apple_sub or not email:
+            raise ValueError("id_token missing sub or email")
+
+    full_name = None
+    if user_json:
+        try:
+            user_data = json.loads(user_json)
+            name_obj = user_data.get("name", {})
+            first = name_obj.get("firstName", "")
+            last = name_obj.get("lastName", "")
+            if first or last:
+                full_name = f"{last}{first}".strip()
+                if first and last:
+                    full_name = f"{last}{first}" if \
+                        any('\u3131' <= char <= '\u3163' or '\uac00' <= char <= '\ud7a3' for char in str(last)) \
+                        else f"{first} {last}"
+                else:
+                    full_name = first or last
+
+        except json.JSONDecodeError:
+            pass
+
+    # Check existing user
+    existing_user = await user_service.get_user_by_oauth(
+        session=session, provider=OAuthProvider.apple, provider_id=apple_sub
+    )
+
+    if existing_user:
+        access_token_jwt = create_access_token(subject=str(existing_user.id))
+        refresh_token_jwt = create_refresh_token(subject=str(existing_user.id))
+
+        await user_service.update_tokens(
+            session=session, db_user=existing_user, refresh_token=refresh_token_jwt
+        )
+
+        return OAuthCallbackResponse(
+            is_new_user=False,
+            access_token=access_token_jwt,
+            refresh_token=refresh_token_jwt,
+        )
+
+    # Create new user
+    new_user = await create_oauth_user(
+        session=session,
+        oauth_user=OAuthUserCreate(
+            email=email,
+            full_name=full_name,  # might be None if not first login or skipped
+            oauth_provider=OAuthProvider.apple,
+            oauth_provider_id=apple_sub,
+            profile_image_url=None,  # Apple doesn't provide avatar
+        ),
+    )
+
+    access_token_jwt = create_access_token(subject=str(new_user.id))
+    refresh_token_jwt = create_refresh_token(subject=str(new_user.id))
+
+    await user_service.update_refresh_token(
+        session=session, db_user=new_user, refresh_token=refresh_token_jwt
+    )
+
+    return OAuthCallbackResponse(
+        is_new_user=True,
+        access_token=access_token_jwt,
+        refresh_token=refresh_token_jwt,
+    )
