@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.experience.models import Experience
 from src.experience.service import get_experience
-from .prompts import COVER_LETTER_SYSTEM_PROMPT
+from .prompts import COVER_LETTER_SYSTEM_PROMPT, PLANNING_PROMPT
 from .chat_history import PostgresChatMessageHistory
 from .dependencies import LLMProvider, get_llm_provider
 
@@ -21,6 +21,23 @@ class DraftClassification(BaseModel):
 
     is_draft: bool = Field(
         description="지원자 관점에서 본인의 경험/역량을 서술한 글이면 True, AI가 사용자에게 말하는 글이면 False"
+    )
+
+
+class FactItem(BaseModel):
+    """경험에서 추출한 사실 정보"""
+    fact: str = Field(description="사용할 구체적인 사실 (수치, 성과, 역할 등)")
+    source: str = Field(description="출처 경험 제목")
+
+
+class ContentPlan(BaseModel):
+    """자기소개서 작성 계획"""
+    is_cover_letter_request: bool = Field(
+        description="자기소개서 작성/수정 요청이면 True, 단순 질문/피드백 요청이면 False"
+    )
+    allowed_facts: list[FactItem] = Field(
+        default=[],
+        description="경험 정보에서 추출한 사용 가능한 사실 목록"
     )
 
 
@@ -41,6 +58,33 @@ async def classify_draft_response(
     )
 
     return result.is_draft
+
+
+async def plan_content(
+    *,
+    user_message: str,
+    question_content: str,
+    max_length: int | None,
+    experiences_text: str,
+    llm_provider: LLMProvider | None = None,
+) -> ContentPlan:
+    """
+    계획 단계: 사용자 요청을 분석하고 사용할 경험/사실 추출
+
+    자기소개서 작성 요청이 아니면 빈 계획 반환
+    """
+    provider = llm_provider or get_llm_provider()
+    llm_with_structured = provider.classification_llm.with_structured_output(ContentPlan)
+
+    prompt = PLANNING_PROMPT.format(
+        user_message=user_message,
+        question=question_content,
+        max_length=max_length or "제한 없음",
+        experiences=experiences_text,
+    )
+
+    result = await llm_with_structured.ainvoke(prompt)
+    return result
 
 
 def _format_experience(exp: Experience) -> str:
@@ -88,12 +132,15 @@ async def generate_ai_response_stream(
     llm_provider: LLMProvider | None = None,
 ) -> AsyncGenerator[str, None]:
     """
-    RAG 기반 AI 응답 스트리밍 생성 (RunnableWithMessageHistory 사용)
+    2단계 할루시네이션 방지 AI 응답 스트리밍 생성
+
+    1단계: 계획 - Function Calling으로 사용할 경험/사실 추출
+    2단계: 생성 - 계획된 정보만 사용하여 스트리밍 생성
 
     Yields:
         JSON 형식의 SSE 데이터
         - {"type": "content", "content": "..."} - 스트리밍 콘텐츠
-        - {"type": "done", "content": "전체 내용"} - 완료 시
+        - {"type": "done", "content": "..."} - 완료 시
         - {"type": "error", "message": "..."} - 에러 시
     """
     try:
@@ -111,21 +158,40 @@ async def generate_ai_response_stream(
                     _format_experience(exp) for exp in experiences
                 )
 
-        # 2. 프롬프트 구성
+        # 2. [계획 단계] 사용할 경험/사실 추출
+        content_plan = await plan_content(
+            user_message=user_message,
+            question_content=question_content,
+            max_length=max_length,
+            experiences_text=experiences_text,
+            llm_provider=provider,
+        )
+
+        # 허용된 사실 목록을 텍스트로 변환
+        allowed_facts_text = ""
+        if content_plan.is_cover_letter_request and content_plan.allowed_facts:
+            allowed_facts_text = "\n".join(
+                f"- {fact.fact} (출처: {fact.source})"
+                for fact in content_plan.allowed_facts
+            )
+        else:
+            allowed_facts_text = "제한 없음 (자기소개서 작성 요청이 아님)"
+
+        # 3. 프롬프트 구성
         prompt = ChatPromptTemplate.from_messages([
             ("system", COVER_LETTER_SYSTEM_PROMPT),
             MessagesPlaceholder(variable_name="chat_history"),
             ("human", "{input}"),
         ])
 
-        # 3. 체인 구성
+        # 4. 체인 구성
         chain = prompt | provider.streaming_llm
 
-        # 4. PostgresChatMessageHistory 인스턴스 생성 및 히스토리 로드
+        # 5. PostgresChatMessageHistory 인스턴스 생성 및 히스토리 로드
         chat_history_instance = PostgresChatMessageHistory(db=db, question_id=question_id)
         await chat_history_instance.aget_messages()
 
-        # 5. RunnableWithMessageHistory로 체인 래핑
+        # 6. RunnableWithMessageHistory로 체인 래핑
         chain_with_history = RunnableWithMessageHistory(
             chain,
             lambda session_id: chat_history_instance,
@@ -133,7 +199,7 @@ async def generate_ai_response_stream(
             history_messages_key="chat_history",
         )
 
-        # 6. 스트리밍 응답 생성
+        # 7. [생성 단계] 스트리밍 응답 생성
         full_content = ""
         async for chunk in chain_with_history.astream(
             {
@@ -142,6 +208,7 @@ async def generate_ai_response_stream(
                 "question": question_content,
                 "max_length": max_length or "제한 없음",
                 "experiences": experiences_text,
+                "allowed_facts": allowed_facts_text,
                 "input": user_message,
             },
             config={"configurable": {"session_id": str(question_id)}},
@@ -151,7 +218,7 @@ async def generate_ai_response_stream(
                 full_content += content
                 yield json.dumps({"type": "content", "content": content}, ensure_ascii=False)
 
-        # 7. 완료 이벤트
+        # 8. 완료 이벤트
         yield json.dumps({"type": "done", "content": full_content}, ensure_ascii=False)
 
     except Exception as e:
