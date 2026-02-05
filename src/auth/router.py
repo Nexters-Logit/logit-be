@@ -128,9 +128,9 @@ async def apple_login():
     ),
 )
 async def apple_callback(
+    session: SessionDep,
     code: str = Form(...),
     user: str | None = Form(None),
-    session: SessionDep,
 ):
     """
     Apple OAuth 콜백을 처리합니다.

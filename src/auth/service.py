@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 
 import httpx
+import json
 import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -197,7 +198,16 @@ async def apple_oauth_flow(
             raise ValueError("No id_token in response from Apple")
 
         try:
-            decoded = jwt.decode(id_token, options={"verify_signature": False})
+            jwks_client = jwt.PyJWKClient("https://appleid.apple.com/auth/keys")
+            signing_key = jwks_client.get_signing_key_from_jwt(id_token)
+
+            decoded = jwt.decode(
+                id_token,
+                signing_key.key,
+                algorithms=["RS256"],
+                audience=settings.APPLE_CLIENT_ID,
+                issuer="https://appleid.apple.com",
+            )
         except Exception as e:
             raise ValueError(f"Invalid id_token: {str(e)}")
 
@@ -207,7 +217,6 @@ async def apple_oauth_flow(
         if not apple_sub or not email:
             raise ValueError("id_token missing sub or email")
 
-    full_name = None
     if user_json:
         try:
             user_data = json.loads(user_json)
