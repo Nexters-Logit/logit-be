@@ -13,7 +13,7 @@ class ExperienceCreate(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=200, description="경험 제목")
     start_date: dt.date = Field(..., description="경험 시작 날짜")
-    end_date: dt.date = Field(..., description="경험 종료 날짜")
+    end_date: dt.date | None = Field(None, description="경험 종료 날짜")
     experience_type: ExperienceType = Field(..., description="경험 타입")
     situation: str = Field(..., min_length=1, description="상황 (STAR의 S)")
     task: str = Field(..., min_length=1, description="과제 (STAR의 T)")
@@ -68,7 +68,7 @@ class ExperienceRead(BaseModel):
     user_id: str = Field(..., description="소유자 ID")
     title: str = Field(..., description="경험 제목")
     start_date: dt.date = Field(..., description="경험 시작 날짜")
-    end_date: dt.date = Field(..., description="경험 종료 날짜")
+    end_date: dt.date | None = Field(None, description="경험 종료 날짜")
     experience_type: ExperienceType = Field(..., description="경험 타입")
     situation: str = Field(..., description="상황 (STAR의 S)")
     task: str = Field(..., description="과제 (STAR의 T)")
