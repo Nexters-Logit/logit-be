@@ -143,7 +143,24 @@ async def update_question(
 async def delete_question(
     session: AsyncSession, db_question: Question
 ) -> Question:
-    """문항 삭제 (Soft Delete)"""
+    """문항 삭제 (Soft Delete) - 프로젝트에 최소 1개의 문항은 남아있어야 함"""
+    # 해당 프로젝트에서 삭제되지 않은 문항 수 확인
+    statement = (
+        select(func.count())
+        .select_from(Question)
+        .where(Question.project_id == db_question.project_id)
+        .where(Question.user_id == db_question.user_id)
+        .where(Question.deleted_at.is_(None))
+    )
+    result = await session.execute(statement)
+    active_count = result.scalar()
+
+    if active_count <= 1:
+        raise HTTPException(
+            status_code=400,
+            detail="프로젝트에는 최소 1개의 문항이 있어야 합니다.",
+        )
+
     db_question.deleted_at = datetime.now(timezone.utc)
 
     session.add(db_question)

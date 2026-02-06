@@ -3,7 +3,9 @@
 import datetime as dt
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+import re
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.experience.models import ExperienceCategory, ExperienceType
 
@@ -20,6 +22,19 @@ class ExperienceCreate(BaseModel):
     action: str = Field(..., min_length=1, description="행동 (STAR의 A)")
     result: str = Field(..., min_length=1, description="결과 (STAR의 R)")
     category: ExperienceCategory = Field(..., description="카테고리")
+
+    @field_validator("end_date", mode="before")
+    @classmethod
+    def validate_end_date(cls, v: object) -> object:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            if v.strip() == "":
+                return None
+            if not re.match(r"^\d{4}-\d{2}-\d{2}$", v.strip()):
+                raise ValueError("날짜 형식은 YYYY-MM-DD이어야 합니다.")
+            return v.strip()
+        return v
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -50,6 +65,19 @@ class ExperienceUpdate(BaseModel):
     action: str | None = Field(None, min_length=1, description="행동 (STAR의 A)")
     result: str | None = Field(None, min_length=1, description="결과 (STAR의 R)")
     category: ExperienceCategory | None = Field(None, description="카테고리")
+
+    @field_validator("end_date", mode="before")
+    @classmethod
+    def validate_end_date(cls, v: object) -> object:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            if v.strip() == "":
+                return None
+            if not re.match(r"^\d{4}-\d{2}-\d{2}$", v.strip()):
+                raise ValueError("날짜 형식은 YYYY-MM-DD이어야 합니다.")
+            return v.strip()
+        return v
 
     model_config = ConfigDict(
         json_schema_extra={
