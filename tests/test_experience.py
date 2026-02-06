@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from src.experience.models import Experience, ExperienceCategory, ExperienceType
-from src.experience.schemas import ExperienceCreate
+from src.experience.schemas import ExperienceCreateSTAR
 from src.projects.models import Project
 from src.questions.models import Question
 from src.security import create_access_token
@@ -120,7 +120,7 @@ def test_experience_create_schema():
         "result": "Result",
         "category": ExperienceCategory.TECHNICAL_PROFICIENCY,
     }
-    schema = ExperienceCreate(**data)
+    schema = ExperienceCreateSTAR(**data)
     assert schema.title == "Test"
     assert schema.experience_type == ExperienceType.PROJECT
 

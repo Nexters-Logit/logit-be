@@ -36,19 +36,38 @@ class ExperienceCategory(str, Enum):
     RESPONSIBILITY = "끈기있는 책임감"
 
 
+class ExperienceFormatType(str, Enum):
+    """Format types for experiences."""
+
+    STAR = "STAR"  # Situation, Task, Action, Result
+    PSI = "PSI"  # Problem, Solution, Insight
+    FREE = "FREE"  # Free format
+
+
 class ExperienceBase(BaseModel):
-    """Base model for Experience with STAR format fields."""
+    """Base model for Experience with multiple format types."""
 
     title: str = Field(..., min_length=1, max_length=200, description="경험 제목")
     start_date: dt.date = Field(..., description="경험 시작 날짜 (YYYY-MM-DD)")
     end_date: dt.date = Field(..., description="경험 종료 날짜 (YYYY-MM-DD)")
     experience_type: ExperienceType = Field(..., description="경험 타입")
-    situation: str = Field(..., min_length=1, description="상황 (STAR의 S)")
-    task: str = Field(..., min_length=1, description="과제 (STAR의 T)")
-    action: str = Field(..., min_length=1, description="행동 (STAR의 A)")
-    result: str = Field(..., min_length=1, description="결과 (STAR의 R)")
+    format_type: ExperienceFormatType = Field(..., description="경험 형식 (STAR/PSI/FREE)")
     category: ExperienceCategory = Field(..., description="카테고리")
     tags: str = Field(..., description="AI 자동 생성 태그 (쉼표로 구분, 1~3개)")
+
+    # STAR format fields (optional, used when format_type=STAR)
+    situation: str | None = Field(None, min_length=1, description="상황 (STAR의 S)")
+    task: str | None = Field(None, min_length=1, description="과제 (STAR의 T)")
+    action: str | None = Field(None, min_length=1, description="행동 (STAR의 A)")
+    result: str | None = Field(None, min_length=1, description="결과 (STAR의 R)")
+
+    # PSI format fields (optional, used when format_type=PSI)
+    problem: str | None = Field(None, min_length=1, description="문제 (PSI의 P)")
+    solution: str | None = Field(None, min_length=1, description="해결책 (PSI의 S)")
+    insight: str | None = Field(None, min_length=1, description="인사이트 (PSI의 I)")
+
+    # Free format field (optional, used when format_type=FREE)
+    content: str | None = Field(None, min_length=1, description="자유 형식 내용")
 
 
 class Experience(ExperienceBase):
@@ -71,6 +90,7 @@ class Experience(ExperienceBase):
                 "start_date": "2024-06-01",
                 "end_date": "2024-06-15",
                 "experience_type": "동아리 활동",
+                "format_type": "STAR",
                 "situation": "팀 프로젝트에서 사용자 문의 응대 자동화가 필요했습니다.",
                 "task": "자연어 처리 기반 챗봇을 설계하고 구현해야 했습니다.",
                 "action": "OpenAI API를 활용하여 RAG 기반 챗봇을 개발하고, FastAPI로 REST API를 구축했습니다.",
