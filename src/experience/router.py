@@ -31,7 +31,7 @@ router = APIRouter()
     response_model=ExperienceRead,
     status_code=status.HTTP_201_CREATED,
     responses=RESPONSES_CREATE_WITH_AUTH,
-    summary="경험 등록",
+    summary="STAR 형식 경험 등록",
 )
 def create_experience(
     experience_create: ExperienceCreateSTAR,
@@ -238,10 +238,10 @@ def get_experience(
 
 
 @router.patch(
-    "/{experience_id}",
+    "/star/{experience_id}",
     response_model=ExperienceRead,
     responses=RESPONSES_CRUD_WITH_AUTH,
-    summary="경험 수정",
+    summary="STAR 형식 경험 수정",
 )
 def update_experience(
     experience_id: str,
