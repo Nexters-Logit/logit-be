@@ -114,7 +114,7 @@ class Settings(BaseSettings):
 
     # OpenAI (for Langchain)
     OPENAI_API_KEY: str | None = None
-    OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_MODEL: str = "gpt-4.1-mini"
     OPENAI_TEMPERATURE: float = 0.7
 
     # Chat Rate Limit
