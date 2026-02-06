@@ -147,6 +147,8 @@ def list_experiences(
 
     - **limit**: 페이지당 항목 수 (기본: 100, 최대: 1000)
     - **offset**: 오프셋 (기본: 0)
+
+    각 경험은 format_type 필드를 포함하여 STAR/PSI/FREE 형식을 구분할 수 있습니다.
     """
     experiences, total = service.list_experiences(
         client=qdrant_client,
@@ -182,6 +184,7 @@ def search_experiences(
     - **limit**: 최대 결과 수 (기본: 10, 최대: 100)
 
     유사도 점수와 함께 관련성 높은 순서로 결과를 반환합니다.
+    각 경험은 format_type 필드를 포함하여 STAR/PSI/FREE 형식을 구분할 수 있습니다.
     """
     results = service.search_experiences(
         client=qdrant_client,
@@ -221,6 +224,8 @@ def get_experience(
 
     - **experience_id**: 경험 ID (UUID)
     - 경험을 찾을 수 없거나 소유권이 없는 경우 404 에러를 반환합니다.
+
+    응답에는 format_type 필드가 포함되어 STAR/PSI/FREE 형식을 구분할 수 있습니다.
     """
     experience = service.get_experience(
         client=qdrant_client,
@@ -395,6 +400,7 @@ async def get_experiences_by_question(
     문항 내용과 프로젝트(회사, 직무, 채용공고) 정보를 결합하여 임베딩을 생성하고,
     사용자의 모든 경험과 비교하여 유사도 점수를 계산합니다.
     결과는 유사도가 높은 순서로 정렬되어 반환됩니다.
+    각 경험은 format_type 필드를 포함하여 STAR/PSI/FREE 형식을 구분할 수 있습니다.
     """
     results = await service.get_experiences_with_question_similarity(
         client=qdrant_client,
