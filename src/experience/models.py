@@ -49,7 +49,7 @@ class ExperienceBase(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=200, description="경험 제목")
     start_date: dt.date = Field(..., description="경험 시작 날짜 (YYYY-MM-DD)")
-    end_date: dt.date = Field(..., description="경험 종료 날짜 (YYYY-MM-DD)")
+    end_date: dt.date | None = Field(None, description="경험 종료 날짜 (YYYY-MM-DD)")
     experience_type: ExperienceType = Field(..., description="경험 타입")
     format_type: ExperienceFormatType = Field(..., description="경험 형식 (STAR/PSI/FREE)")
     category: ExperienceCategory = Field(..., description="카테고리")

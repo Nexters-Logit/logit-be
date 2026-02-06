@@ -43,7 +43,7 @@ def create_experience(
 
     - **title**: 경험 제목
     - **start_date**: 경험 시작 날짜 (YYYY-MM-DD)
-    - **end_date**: 경험 종료 날짜 (YYYY-MM-DD)
+    - **end_date**: 경험 종료 날짜 (YYYY-MM-DD) (선택)
     - **experience_type**: 경험 타입 (동아리 활동, 정규직, 봉사 활동 등)
     - **situation**: 상황 (STAR의 S)
     - **task**: 과제 (STAR의 T)
