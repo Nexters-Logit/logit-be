@@ -8,17 +8,13 @@ from src.common.responses import RESPONSES_CREATE_WITH_AUTH, RESPONSES_CRUD_WITH
 from src.experience import service
 from src.experience.dependencies import QdrantDep
 from src.experience.schemas import (
-    ExperienceCreateSTAR,
-    ExperienceCreateFree,
-    ExperienceCreatePSI,
+    ExperienceCreate,
     ExperienceListResponse,
     ExperienceQuestionMatchResult,
     ExperienceRead,
     ExperienceSearchResult,
     ExperienceSearchResponse,
-    ExperienceUpdateSTAR,
-    ExperienceUpdateFree,
-    ExperienceUpdatePSI,
+    ExperienceUpdate,
     ExperienceWithQuestionSimilarity,
 )
 from src.users.dependencies import ActiveUser, SessionDep
@@ -27,102 +23,38 @@ router = APIRouter()
 
 
 @router.post(
-    "/star",
+    "",
     response_model=ExperienceRead,
     status_code=status.HTTP_201_CREATED,
     responses=RESPONSES_CREATE_WITH_AUTH,
-    summary="STAR 형식 경험 등록",
+    summary="경험 등록",
 )
 def create_experience(
-    experience_create: ExperienceCreateSTAR,
+    experience_create: ExperienceCreate,
     current_user: ActiveUser,
     qdrant_client: QdrantDep,
 ) -> ExperienceRead:
     """
-    STAR 형식으로 새로운 경험을 등록합니다. AI가 자동으로 관련 태그(1~3개)를 생성하고, 임베딩을 생성하여 시맨틱 검색이 가능합니다.
+    새로운 경험을 등록합니다. 모든 format_type(STAR/PSI/FREE)을 지원합니다.
+    AI가 자동으로 관련 태그(1~3개)를 생성하고, 임베딩을 생성하여 시맨틱 검색이 가능합니다.
 
+    **공통 필드:**
     - **title**: 경험 제목
     - **start_date**: 경험 시작 날짜 (YYYY-MM-DD)
     - **end_date**: 경험 종료 날짜 (YYYY-MM-DD) (선택)
     - **experience_type**: 경험 타입 (동아리 활동, 정규직, 봉사 활동 등)
-    - **situation**: 상황 (STAR의 S)
-    - **task**: 과제 (STAR의 T)
-    - **action**: 행동 (STAR의 A)
-    - **result**: 결과 (STAR의 R)
+    - **format_type**: 경험 형식 (STAR/PSI/FREE)
     - **category**: 카테고리 (기술적 전문성, 주도적 실행력 등)
+
+    **format_type별 필수 필드:**
+    - **STAR**: situation, task, action, result
+    - **PSI**: problem, solution, insight
+    - **FREE**: content
 
     AI가 경험 내용을 분석하여 다음 중 1~3개의 태그를 자동으로 생성합니다:
     고객 이해력, 전문성, 소통력, 실행력, 분석력, 문제해결력, 적응력, 책임감
     """
     experience = service.create_experience(
-        client=qdrant_client,
-        user_id=str(current_user.id),
-        experience_create=experience_create,
-    )
-    return ExperienceRead(**experience.model_dump())
-
-
-@router.post(
-    "/psi",
-    response_model=ExperienceRead,
-    status_code=status.HTTP_201_CREATED,
-    responses=RESPONSES_CREATE_WITH_AUTH,
-    summary="PSI 형식 경험 등록",
-)
-def create_experience_psi(
-    experience_create: ExperienceCreatePSI,
-    current_user: ActiveUser,
-    qdrant_client: QdrantDep,
-) -> ExperienceRead:
-    """
-    PSI(Problem-Solution-Insight) 형식으로 새로운 경험을 등록합니다. AI가 자동으로 관련 태그(1~3개)를 생성하고, 임베딩을 생성하여 시맨틱 검색이 가능합니다.
-
-    - **title**: 경험 제목
-    - **start_date**: 경험 시작 날짜 (YYYY-MM-DD)
-    - **end_date**: 경험 종료 날짜 (YYYY-MM-DD)
-    - **experience_type**: 경험 타입 (동아리 활동, 정규직, 봉사 활동 등)
-    - **problem**: 문제 (PSI의 P)
-    - **solution**: 해결책 (PSI의 S)
-    - **insight**: 인사이트 (PSI의 I)
-    - **category**: 카테고리 (기술적 전문성, 주도적 실행력 등)
-
-    AI가 경험 내용을 분석하여 다음 중 1~3개의 태그를 자동으로 생성합니다:
-    고객 이해력, 전문성, 소통력, 실행력, 분석력, 문제해결력, 적응력, 책임감
-    """
-    experience = service.create_experience_psi(
-        client=qdrant_client,
-        user_id=str(current_user.id),
-        experience_create=experience_create,
-    )
-    return ExperienceRead(**experience.model_dump())
-
-
-@router.post(
-    "/free",
-    response_model=ExperienceRead,
-    status_code=status.HTTP_201_CREATED,
-    responses=RESPONSES_CREATE_WITH_AUTH,
-    summary="자유 형식 경험 등록",
-)
-def create_experience_free(
-    experience_create: ExperienceCreateFree,
-    current_user: ActiveUser,
-    qdrant_client: QdrantDep,
-) -> ExperienceRead:
-    """
-    자유 형식으로 새로운 경험을 등록합니다. AI가 자동으로 관련 태그(1~3개)를 생성하고, 임베딩을 생성하여 시맨틱 검색이 가능합니다.
-
-    - **title**: 경험 제목
-    - **start_date**: 경험 시작 날짜 (YYYY-MM-DD)
-    - **end_date**: 경험 종료 날짜 (YYYY-MM-DD)
-    - **experience_type**: 경험 타입 (동아리 활동, 정규직, 봉사 활동 등)
-    - **content**: 자유 형식 내용
-    - **category**: 카테고리 (기술적 전문성, 주도적 실행력 등)
-
-    AI가 경험 내용을 분석하여 다음 중 1~3개의 태그를 자동으로 생성합니다:
-    고객 이해력, 전문성, 소통력, 실행력, 분석력, 문제해결력, 적응력, 책임감
-    """
-    experience = service.create_experience_free(
         client=qdrant_client,
         user_id=str(current_user.id),
         experience_create=experience_create,
@@ -243,104 +175,33 @@ def get_experience(
 
 
 @router.patch(
-    "/star/{experience_id}",
+    "/{experience_id}",
     response_model=ExperienceRead,
     responses=RESPONSES_CRUD_WITH_AUTH,
-    summary="STAR 형식 경험 수정",
+    summary="경험 수정",
 )
 def update_experience(
     experience_id: str,
-    experience_update: ExperienceUpdateSTAR,
+    experience_update: ExperienceUpdate,
     current_user: ActiveUser,
     qdrant_client: QdrantDep,
 ) -> ExperienceRead:
     """
-    기존 경험을 수정합니다.
+    기존 경험을 수정합니다. 모든 format_type(STAR/PSI/FREE)을 지원합니다.
 
     - **experience_id**: 경험 ID (UUID)
     - **experience_update**: 수정할 필드 (부분 업데이트 지원)
 
-    내용(title, situation, task, action, result)이 변경되면:
+    경험의 format_type에 따라 적절한 필드만 업데이트됩니다:
+    - **STAR**: title, situation, task, action, result 등
+    - **PSI**: title, problem, solution, insight 등
+    - **FREE**: title, content 등
+
+    내용이 변경되면:
     - AI가 태그를 자동으로 재생성합니다.
     - 시맨틱 검색을 위한 임베딩이 재생성됩니다.
     """
     experience = service.update_experience(
-        client=qdrant_client,
-        experience_id=experience_id,
-        user_id=str(current_user.id),
-        experience_update=experience_update,
-    )
-
-    if not experience:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Experience not found or cannot be updated.",
-        )
-
-    return ExperienceRead(**experience.model_dump())
-
-
-@router.patch(
-    "/psi/{experience_id}",
-    response_model=ExperienceRead,
-    responses=RESPONSES_CRUD_WITH_AUTH,
-    summary="PSI 형식 경험 수정",
-)
-def update_experience_psi(
-    experience_id: str,
-    experience_update: ExperienceUpdatePSI,
-    current_user: ActiveUser,
-    qdrant_client: QdrantDep,
-) -> ExperienceRead:
-    """
-    기존 PSI 형식 경험을 수정합니다.
-
-    - **experience_id**: 경험 ID (UUID)
-    - **experience_update**: 수정할 필드 (부분 업데이트 지원)
-
-    내용(title, problem, solution, insight)이 변경되면:
-    - AI가 태그를 자동으로 재생성합니다.
-    - 시맨틱 검색을 위한 임베딩이 재생성됩니다.
-    """
-    experience = service.update_experience_psi(
-        client=qdrant_client,
-        experience_id=experience_id,
-        user_id=str(current_user.id),
-        experience_update=experience_update,
-    )
-
-    if not experience:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Experience not found or cannot be updated.",
-        )
-
-    return ExperienceRead(**experience.model_dump())
-
-
-@router.patch(
-    "/free/{experience_id}",
-    response_model=ExperienceRead,
-    responses=RESPONSES_CRUD_WITH_AUTH,
-    summary="자유 형식 경험 수정",
-)
-def update_experience_free(
-    experience_id: str,
-    experience_update: ExperienceUpdateFree,
-    current_user: ActiveUser,
-    qdrant_client: QdrantDep,
-) -> ExperienceRead:
-    """
-    기존 자유 형식 경험을 수정합니다.
-
-    - **experience_id**: 경험 ID (UUID)
-    - **experience_update**: 수정할 필드 (부분 업데이트 지원)
-
-    내용(title, content)이 변경되면:
-    - AI가 태그를 자동으로 재생성합니다.
-    - 시맨틱 검색을 위한 임베딩이 재생성됩니다.
-    """
-    experience = service.update_experience_free(
         client=qdrant_client,
         experience_id=experience_id,
         user_id=str(current_user.id),

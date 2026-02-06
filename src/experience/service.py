@@ -13,12 +13,8 @@ from sqlmodel import select
 from src.config import settings
 from src.experience.models import Experience, ExperienceFormatType
 from src.experience.schemas import (
-    ExperienceCreateSTAR,
-    ExperienceCreateFree,
-    ExperienceCreatePSI,
-    ExperienceUpdateSTAR,
-    ExperienceUpdateFree,
-    ExperienceUpdatePSI,
+    ExperienceCreate,
+    ExperienceUpdate,
 )
 from src.projects.models import Project
 from src.questions.models import Question
@@ -171,15 +167,15 @@ def _generate_tags(experience: Experience) -> str:
 def create_experience(
     client: QdrantClient,
     user_id: str,
-    experience_create: ExperienceCreateSTAR,
+    experience_create: ExperienceCreate,
 ) -> Experience:
     """
-    Create a new STAR format experience with embedding and auto-generated tags.
+    Create a new experience with embedding and auto-generated tags. Supports all format types (STAR/PSI/FREE).
 
     Args:
         client: Qdrant client
         user_id: Owner user ID
-        experience_create: Experience creation data
+        experience_create: Experience creation data with format_type
 
     Returns:
         Created Experience object
@@ -191,7 +187,6 @@ def create_experience(
     temp_experience = Experience(
         id=str(uuid4()),
         user_id=user_id,
-        format_type=ExperienceFormatType.STAR,
         **experience_create.model_dump(),
         tags="",  # Will be generated
         created_at=datetime.utcnow(),
@@ -205,7 +200,6 @@ def create_experience(
     experience = Experience(
         id=temp_experience.id,
         user_id=user_id,
-        format_type=ExperienceFormatType.STAR,
         **experience_create.model_dump(),
         tags=tags,
         created_at=temp_experience.created_at,
@@ -237,142 +231,6 @@ def create_experience(
     return experience
 
 
-def create_experience_psi(
-    client: QdrantClient,
-    user_id: str,
-    experience_create: ExperienceCreatePSI,
-) -> Experience:
-    """
-    Create a new PSI format experience with embedding and auto-generated tags.
-
-    Args:
-        client: Qdrant client
-        user_id: Owner user ID
-        experience_create: PSI experience creation data
-
-    Returns:
-        Created Experience object
-
-    Raises:
-        HTTPException: If OpenAI API fails
-    """
-    # Create temporary Experience object for tag generation
-    temp_experience = Experience(
-        id=str(uuid4()),
-        user_id=user_id,
-        format_type=ExperienceFormatType.PSI,
-        **experience_create.model_dump(),
-        tags="",  # Will be generated
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
-    )
-
-    # Generate tags using AI
-    tags = _generate_tags(temp_experience)
-
-    # Create final Experience object with tags
-    experience = Experience(
-        id=temp_experience.id,
-        user_id=user_id,
-        format_type=ExperienceFormatType.PSI,
-        **experience_create.model_dump(),
-        tags=tags,
-        created_at=temp_experience.created_at,
-        updated_at=temp_experience.updated_at,
-    )
-
-    # Generate embedding
-    try:
-        text = _combine_text_for_embedding(experience)
-        embedding = _generate_embedding(text)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate embedding: {str(e)}",
-        )
-
-    # Store in Qdrant
-    point = PointStruct(
-        id=experience.id,
-        vector=embedding,
-        payload=experience.model_dump(mode="json"),
-    )
-
-    client.upsert(
-        collection_name=settings.QDRANT_COLLECTION_NAME,
-        points=[point],
-    )
-
-    return experience
-
-
-def create_experience_free(
-    client: QdrantClient,
-    user_id: str,
-    experience_create: ExperienceCreateFree,
-) -> Experience:
-    """
-    Create a new free format experience with embedding and auto-generated tags.
-
-    Args:
-        client: Qdrant client
-        user_id: Owner user ID
-        experience_create: Free format experience creation data
-
-    Returns:
-        Created Experience object
-
-    Raises:
-        HTTPException: If OpenAI API fails
-    """
-    # Create temporary Experience object for tag generation
-    temp_experience = Experience(
-        id=str(uuid4()),
-        user_id=user_id,
-        format_type=ExperienceFormatType.FREE,
-        **experience_create.model_dump(),
-        tags="",  # Will be generated
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
-    )
-
-    # Generate tags using AI
-    tags = _generate_tags(temp_experience)
-
-    # Create final Experience object with tags
-    experience = Experience(
-        id=temp_experience.id,
-        user_id=user_id,
-        format_type=ExperienceFormatType.FREE,
-        **experience_create.model_dump(),
-        tags=tags,
-        created_at=temp_experience.created_at,
-        updated_at=temp_experience.updated_at,
-    )
-
-    # Generate embedding
-    try:
-        text = _combine_text_for_embedding(experience)
-        embedding = _generate_embedding(text)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate embedding: {str(e)}",
-        )
-
-    # Store in Qdrant
-    point = PointStruct(
-        id=experience.id,
-        vector=embedding,
-        payload=experience.model_dump(mode="json"),
-    )
-
-    client.upsert(
-        collection_name=settings.QDRANT_COLLECTION_NAME,
-        points=[point],
-    )
-
-    return experience
 
 
 def get_experience(
@@ -479,10 +337,10 @@ def update_experience(
     client: QdrantClient,
     experience_id: str,
     user_id: str,
-    experience_update: ExperienceUpdateSTAR,
+    experience_update: ExperienceUpdate,
 ) -> Experience:
     """
-    Update an existing experience with auto-regenerated tags.
+    Update an existing experience with auto-regenerated tags. Supports all format types (STAR/PSI/FREE).
 
     Args:
         client: Qdrant client
@@ -552,154 +410,6 @@ def update_experience(
     return updated_experience
 
 
-def update_experience_psi(
-    client: QdrantClient,
-    experience_id: str,
-    user_id: str,
-    experience_update: ExperienceUpdatePSI,
-) -> Experience:
-    """
-    Update an existing PSI format experience with auto-regenerated tags.
-
-    Args:
-        client: Qdrant client
-        experience_id: Experience ID
-        user_id: Owner user ID for authorization
-        experience_update: Update data (partial)
-
-    Returns:
-        Updated Experience object
-
-    Raises:
-        HTTPException: If not found, unauthorized, or update fails
-    """
-    # Get existing experience
-    existing = get_experience(client, experience_id, user_id)
-
-    # Verify format type
-    if existing.format_type != ExperienceFormatType.PSI:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Experience is not in PSI format",
-        )
-
-    # Apply updates
-    update_data = experience_update.model_dump(exclude_unset=True)
-    updated_experience = existing.model_copy(update=update_data)
-    updated_experience.updated_at = datetime.utcnow()
-
-    # Check if content changed
-    content_fields = {"title", "problem", "solution", "insight"}
-    content_changed = any(field in update_data for field in content_fields)
-
-    if content_changed:
-        # Regenerate tags using AI
-        updated_experience.tags = _generate_tags(updated_experience)
-
-        # Regenerate embedding
-        try:
-            text = _combine_text_for_embedding(updated_experience)
-            embedding = _generate_embedding(text)
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to generate embedding: {str(e)}",
-            )
-
-        # Update with new embedding
-        point = PointStruct(
-            id=experience_id,
-            vector=embedding,
-            payload=updated_experience.model_dump(mode="json"),
-        )
-        client.upsert(
-            collection_name=settings.QDRANT_COLLECTION_NAME,
-            points=[point],
-        )
-    else:
-        # Update payload only
-        client.set_payload(
-            collection_name=settings.QDRANT_COLLECTION_NAME,
-            payload=updated_experience.model_dump(mode="json"),
-            points=[experience_id],
-        )
-
-    return updated_experience
-
-
-def update_experience_free(
-    client: QdrantClient,
-    experience_id: str,
-    user_id: str,
-    experience_update: ExperienceUpdateFree,
-) -> Experience:
-    """
-    Update an existing free format experience with auto-regenerated tags.
-
-    Args:
-        client: Qdrant client
-        experience_id: Experience ID
-        user_id: Owner user ID for authorization
-        experience_update: Update data (partial)
-
-    Returns:
-        Updated Experience object
-
-    Raises:
-        HTTPException: If not found, unauthorized, or update fails
-    """
-    # Get existing experience
-    existing = get_experience(client, experience_id, user_id)
-
-    # Verify format type
-    if existing.format_type != ExperienceFormatType.FREE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Experience is not in FREE format",
-        )
-
-    # Apply updates
-    update_data = experience_update.model_dump(exclude_unset=True)
-    updated_experience = existing.model_copy(update=update_data)
-    updated_experience.updated_at = datetime.utcnow()
-
-    # Check if content changed
-    content_fields = {"title", "content"}
-    content_changed = any(field in update_data for field in content_fields)
-
-    if content_changed:
-        # Regenerate tags using AI
-        updated_experience.tags = _generate_tags(updated_experience)
-
-        # Regenerate embedding
-        try:
-            text = _combine_text_for_embedding(updated_experience)
-            embedding = _generate_embedding(text)
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to generate embedding: {str(e)}",
-            )
-
-        # Update with new embedding
-        point = PointStruct(
-            id=experience_id,
-            vector=embedding,
-            payload=updated_experience.model_dump(mode="json"),
-        )
-        client.upsert(
-            collection_name=settings.QDRANT_COLLECTION_NAME,
-            points=[point],
-        )
-    else:
-        # Update payload only
-        client.set_payload(
-            collection_name=settings.QDRANT_COLLECTION_NAME,
-            payload=updated_experience.model_dump(mode="json"),
-            points=[experience_id],
-        )
-
-    return updated_experience
 
 
 def delete_experience(

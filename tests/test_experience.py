@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from src.experience.models import Experience, ExperienceCategory, ExperienceFormatType, ExperienceType
-from src.experience.schemas import ExperienceCreateFree, ExperienceCreatePSI, ExperienceCreateSTAR
+from src.experience.schemas import ExperienceCreate
 from src.projects.models import Project
 from src.questions.models import Question
 from src.security import create_access_token
@@ -73,6 +73,7 @@ def sample_experience_data() -> dict:
         "start_date": "2024-06-01",
         "end_date": "2024-06-15",
         "experience_type": "동아리 활동",
+        "format_type": "STAR",
         "situation": "팀 프로젝트에서 사용자 문의 응대 자동화가 필요했습니다.",
         "task": "자연어 처리 기반 챗봇을 설계하고 구현해야 했습니다.",
         "action": "OpenAI API를 활용하여 RAG 기반 챗봇을 개발하고, FastAPI로 REST API를 구축했습니다.",
@@ -89,6 +90,7 @@ def sample_psi_experience_data() -> dict:
         "start_date": "2024-03-01",
         "end_date": "2024-05-30",
         "experience_type": "정규직",
+        "format_type": "PSI",
         "problem": "팀원 간 커뮤니케이션이 원활하지 않아 프로젝트 진행이 지연되었습니다.",
         "solution": "주간 스탠드업 미팅을 도입하고 Notion으로 작업 현황을 실시간 공유했습니다.",
         "insight": "정기적인 소통과 투명한 정보 공유가 팀 생산성을 크게 향상시킨다는 것을 배웠습니다.",
@@ -104,6 +106,7 @@ def sample_free_experience_data() -> dict:
         "start_date": "2024-01-10",
         "end_date": "2024-02-20",
         "experience_type": "개인 활동",
+        "format_type": "FREE",
         "content": "React 라이브러리의 버그를 발견하고 수정하는 PR을 제출했습니다. 커뮤니티의 피드백을 받아 코드를 개선했고, 최종적으로 메인 브랜치에 머지되었습니다. 이 과정에서 코드 리뷰 문화와 오픈소스 기여 프로세스를 깊이 이해하게 되었습니다.",
         "category": "기술적 전문성",
     }
@@ -186,54 +189,60 @@ def test_experience_model_creation_free():
 
 
 def test_experience_create_star_schema():
-    """Test ExperienceCreateSTAR schema validation."""
+    """Test ExperienceCreate schema validation for STAR format."""
     data = {
         "title": "Test",
         "start_date": dt.date(2024, 6, 1),
         "end_date": dt.date(2024, 6, 15),
         "experience_type": ExperienceType.FULL_TIME,
+        "format_type": ExperienceFormatType.STAR,
         "situation": "Situation",
         "task": "Task",
         "action": "Action",
         "result": "Result",
         "category": ExperienceCategory.TECHNICAL_PROFICIENCY,
     }
-    schema = ExperienceCreateSTAR(**data)
+    schema = ExperienceCreate(**data)
     assert schema.title == "Test"
     assert schema.experience_type == ExperienceType.FULL_TIME
+    assert schema.format_type == ExperienceFormatType.STAR
 
 
 def test_experience_create_psi_schema():
-    """Test ExperienceCreatePSI schema validation."""
+    """Test ExperienceCreate schema validation for PSI format."""
     data = {
         "title": "PSI Test",
         "start_date": dt.date(2024, 3, 1),
         "end_date": dt.date(2024, 5, 30),
         "experience_type": ExperienceType.FULL_TIME,
+        "format_type": ExperienceFormatType.PSI,
         "problem": "Problem",
         "solution": "Solution",
         "insight": "Insight",
         "category": ExperienceCategory.COLLABORATIVE_COMMUNICATION,
     }
-    schema = ExperienceCreatePSI(**data)
+    schema = ExperienceCreate(**data)
     assert schema.title == "PSI Test"
+    assert schema.format_type == ExperienceFormatType.PSI
     assert schema.problem == "Problem"
     assert schema.solution == "Solution"
     assert schema.insight == "Insight"
 
 
 def test_experience_create_free_schema():
-    """Test ExperienceCreateFree schema validation."""
+    """Test ExperienceCreate schema validation for FREE format."""
     data = {
         "title": "Free Test",
         "start_date": dt.date(2024, 1, 10),
         "end_date": dt.date(2024, 2, 20),
         "experience_type": ExperienceType.OTHER,
+        "format_type": ExperienceFormatType.FREE,
         "content": "Free format content",
         "category": ExperienceCategory.TECHNICAL_PROFICIENCY,
     }
-    schema = ExperienceCreateFree(**data)
+    schema = ExperienceCreate(**data)
     assert schema.title == "Free Test"
+    assert schema.format_type == ExperienceFormatType.FREE
     assert schema.content == "Free format content"
 
 
@@ -278,7 +287,7 @@ def test_create_psi_experience_success(
     mock_get_qdrant.return_value = mock_qdrant_client
 
     response = client.post(
-        "/api/v1/experiences/psi",
+        "/api/v1/experiences",
         headers=auth_headers,
         json=sample_psi_experience_data,
     )
@@ -308,7 +317,7 @@ def test_create_free_experience_success(
     mock_get_qdrant.return_value = mock_qdrant_client
 
     response = client.post(
-        "/api/v1/experiences/free",
+        "/api/v1/experiences",
         headers=auth_headers,
         json=sample_free_experience_data,
     )
@@ -541,7 +550,7 @@ def test_update_psi_experience_success(
     update_data = {"title": "Updated PSI Title", "insight": "Updated insight with more details"}
 
     response = client.patch(
-        f"/api/v1/experiences/psi/{experience_id}",
+        f"/api/v1/experiences/{experience_id}",
         headers=auth_headers,
         json=update_data,
     )
@@ -586,7 +595,7 @@ def test_update_free_experience_success(
     update_data = {"content": "Updated content with more information about the experience"}
 
     response = client.patch(
-        f"/api/v1/experiences/free/{experience_id}",
+        f"/api/v1/experiences/{experience_id}",
         headers=auth_headers,
         json=update_data,
     )
