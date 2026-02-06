@@ -149,6 +149,7 @@ async def delete_question(
         select(func.count())
         .select_from(Question)
         .where(Question.project_id == db_question.project_id)
+        .where(Question.user_id == db_question.user_id)
         .where(Question.deleted_at.is_(None))
     )
     result = await session.execute(statement)
