@@ -44,12 +44,13 @@ async def get_projects(
     session: AsyncSession, user_id: UUID, skip: int = 0, limit: int = 100
 ) -> List[dict]:
     """사용자의 프로젝트 목록 조회 (삭제되지 않은 것만, 최근 활동순, 문항 1번 ID 포함)"""
-    # 각 프로젝트의 첫 번째 문항(order=1) ID를 서브쿼리로 가져옴
+    # 각 프로젝트에서 삭제되지 않은 문항 중 가장 작은 order의 ID를 서브쿼리로 가져옴
     first_question_subquery = (
         select(Question.id)
         .where(Question.project_id == Project.id)
-        .where(Question.order == 1)
         .where(Question.deleted_at.is_(None))
+        .order_by(Question.order.asc())
+        .limit(1)
         .correlate(Project)
         .scalar_subquery()
     )

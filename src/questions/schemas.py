@@ -22,6 +22,29 @@ class QuestionCreate(BaseModel):
     )
 
 
+class BulkQuestionCreate(BaseModel):
+    """문항 다건 생성 요청"""
+
+    questions: list[QuestionCreate] = Field(..., min_length=1, description="문항 목록")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "questions": [
+                    {
+                        "question": "본인이 가장 열정적으로 참여한 프로젝트 경험을 설명해 주세요.",
+                        "max_length": 1000,
+                    },
+                    {
+                        "question": "지원 동기와 입사 후 포부를 작성해 주세요.",
+                        "max_length": 800,
+                    },
+                ]
+            }
+        }
+    )
+
+
 class QuestionUpdate(BaseModel):
     """문항 수정 요청"""
 

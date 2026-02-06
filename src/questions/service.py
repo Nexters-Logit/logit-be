@@ -9,7 +9,7 @@ from sqlmodel import select
 
 from src.projects.models import Project
 from src.questions.models import Question
-from src.questions.schemas import QuestionCreate, QuestionUpdate
+from src.questions.schemas import BulkQuestionCreate, QuestionCreate, QuestionUpdate
 
 
 async def get_next_order(session: AsyncSession, project_id: UUID, user_id: UUID) -> int:
@@ -55,6 +55,43 @@ async def create_question(
     await session.commit()
     await session.refresh(db_question)
     return db_question
+
+
+async def create_questions_bulk(
+    session: AsyncSession,
+    bulk_create: BulkQuestionCreate,
+    project_id: UUID,
+    user_id: UUID,
+) -> List[Question]:
+    """문항 다건 생성"""
+
+    statement = select(Project.id).where(
+        Project.id == project_id,
+        Project.user_id == user_id,
+        Project.deleted_at.is_(None),
+    )
+    result = await session.execute(statement)
+    if not result.scalar():
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    next_order = await get_next_order(session, project_id, user_id)
+
+    created_questions = []
+    for idx, question_data in enumerate(bulk_create.questions):
+        db_question = Question(
+            project_id=project_id,
+            user_id=user_id,
+            question=question_data.question,
+            max_length=question_data.max_length,
+            order=next_order + idx,
+        )
+        session.add(db_question)
+        created_questions.append(db_question)
+
+    await session.commit()
+    for q in created_questions:
+        await session.refresh(q)
+    return created_questions
 
 
 async def get_questions(
