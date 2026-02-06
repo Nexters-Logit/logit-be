@@ -84,7 +84,8 @@ async def google_callback(code: str, session: SessionDep):
     except ValueError as e:
         error_params = urlencode({"error": str(e)})
         return RedirectResponse(
-            url=f"{settings.FRONTEND_HOST}/auth/callback?{error_params}"
+            # url=f"{settings.FRONTEND_HOST}/auth/callback?{error_params}"
+            url=f"https://logit.ai.kr/auth/callback?{error_params}"
         )
 
     params = urlencode({
@@ -93,7 +94,8 @@ async def google_callback(code: str, session: SessionDep):
         "is_new_user": str(result.is_new_user).lower(),
     })
     return RedirectResponse(
-        url=f"{settings.FRONTEND_HOST}/auth/callback?{params}"
+        # url=f"{settings.FRONTEND_HOST}/auth/callback?{params}"
+        url=f"https://logit.ai.kr/auth/callback?{params}"
     )
 
 
