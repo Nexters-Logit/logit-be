@@ -217,21 +217,15 @@ async def apple_oauth_flow(
         if not apple_sub or not email:
             raise ValueError("id_token missing sub or email")
 
+    full_name = ""
     if user_json:
         try:
             user_data = json.loads(user_json)
             name_obj = user_data.get("name", {})
-            first = name_obj.get("firstName", "")
-            last = name_obj.get("lastName", "")
-            if first or last:
-                full_name = f"{last}{first}".strip()
-                if first and last:
-                    full_name = f"{last}{first}" if \
-                        any('\u3131' <= char <= '\u3163' or '\uac00' <= char <= '\ud7a3' for char in str(last)) \
-                        else f"{first} {last}"
-                else:
-                    full_name = first or last
-
+            
+            full_name = name_obj.get("firstName", "")
+            full_name += name_obj.get("lastName", "")
+                
         except json.JSONDecodeError:
             pass
 
