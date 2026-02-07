@@ -3,7 +3,9 @@
 import datetime as dt
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+import re
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.experience.models import ExperienceCategory, ExperienceType
 
@@ -13,13 +15,26 @@ class ExperienceCreate(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=200, description="경험 제목")
     start_date: dt.date = Field(..., description="경험 시작 날짜")
-    end_date: dt.date = Field(..., description="경험 종료 날짜")
+    end_date: dt.date | None = Field(None, description="경험 종료 날짜")
     experience_type: ExperienceType = Field(..., description="경험 타입")
     situation: str = Field(..., min_length=1, description="상황 (STAR의 S)")
     task: str = Field(..., min_length=1, description="과제 (STAR의 T)")
     action: str = Field(..., min_length=1, description="행동 (STAR의 A)")
     result: str = Field(..., min_length=1, description="결과 (STAR의 R)")
     category: ExperienceCategory = Field(..., description="카테고리")
+
+    @field_validator("end_date", mode="before")
+    @classmethod
+    def validate_end_date(cls, v: object) -> object:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            if v.strip() == "":
+                return None
+            if not re.match(r"^\d{4}-\d{2}-\d{2}$", v.strip()):
+                raise ValueError("날짜 형식은 YYYY-MM-DD이어야 합니다.")
+            return v.strip()
+        return v
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -51,6 +66,19 @@ class ExperienceUpdate(BaseModel):
     result: str | None = Field(None, min_length=1, description="결과 (STAR의 R)")
     category: ExperienceCategory | None = Field(None, description="카테고리")
 
+    @field_validator("end_date", mode="before")
+    @classmethod
+    def validate_end_date(cls, v: object) -> object:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            if v.strip() == "":
+                return None
+            if not re.match(r"^\d{4}-\d{2}-\d{2}$", v.strip()):
+                raise ValueError("날짜 형식은 YYYY-MM-DD이어야 합니다.")
+            return v.strip()
+        return v
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -68,7 +96,7 @@ class ExperienceRead(BaseModel):
     user_id: str = Field(..., description="소유자 ID")
     title: str = Field(..., description="경험 제목")
     start_date: dt.date = Field(..., description="경험 시작 날짜")
-    end_date: dt.date = Field(..., description="경험 종료 날짜")
+    end_date: dt.date | None = Field(None, description="경험 종료 날짜")
     experience_type: ExperienceType = Field(..., description="경험 타입")
     situation: str = Field(..., description="상황 (STAR의 S)")
     task: str = Field(..., description="과제 (STAR의 T)")
