@@ -12,8 +12,8 @@ from src.questions.models import Question
 
 async def create_project(
     session: AsyncSession, project_create: ProjectCreate, user_id: UUID
-) -> Project:
-    """프로젝트 생성 (문항 포함)"""
+) -> dict:
+    """프로젝트 생성 (문항 포함, 문항 ID 반환)"""
     # questions를 제외한 프로젝트 데이터
     project_data = project_create.model_dump(exclude={"questions"})
 
@@ -25,6 +25,7 @@ async def create_project(
     await session.flush()  # project.id 생성을 위해 flush
 
     # 문항 생성 (order는 리스트 순서 기반으로 자동 생성)
+    created_questions = []
     for idx, question_data in enumerate(project_create.questions, start=1):
         db_question = Question(
             project_id=db_project.id,
@@ -34,10 +35,17 @@ async def create_project(
             order=idx,
         )
         session.add(db_question)
+        created_questions.append(db_question)
 
     await session.commit()
     await session.refresh(db_project)
-    return db_project
+    for q in created_questions:
+        await session.refresh(q)
+
+    return {
+        "project": db_project,
+        "questions": created_questions,
+    }
 
 
 async def get_projects(

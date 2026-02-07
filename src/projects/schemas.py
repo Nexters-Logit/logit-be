@@ -116,6 +116,39 @@ class ProjectRead(BaseModel):
     )
 
 
+class ProjectCreateResponse(BaseModel):
+    """프로젝트 생성 응답 (문항 ID 포함)"""
+
+    project: ProjectRead = Field(..., description="프로젝트 정보")
+    questions: list[QuestionListItem] = Field(..., description="생성된 문항 목록")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "project": {
+                    "id": "123e4567-e89b-12d3-a456-426614174000",
+                    "user_id": "987fcdeb-51a2-43d7-9876-543210fedcba",
+                    "company": "카카오",
+                    "job_position": "백엔드 개발자",
+                    "recruit_notice": "2024년 상반기 신입 개발자 공개채용",
+                    "due_date": "2024-12-31",
+                    "created_at": "2024-06-15T10:00:00Z",
+                    "updated_at": "2024-06-15T10:00:00Z",
+                    "deleted_at": None,
+                },
+                "questions": [
+                    {
+                        "id": "333e4567-e89b-12d3-a456-426614174002",
+                        "question": "본인이 가장 열정적으로 참여한 프로젝트 경험을 설명해 주세요.",
+                        "max_length": 1000,
+                        "answer": None,
+                    },
+                ],
+            }
+        }
+    )
+
+
 class ProjectListResponse(BaseModel):
     """프로젝트 목록 조회 응답"""
 
