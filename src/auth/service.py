@@ -1,32 +1,84 @@
 """Authentication service layer - OAuth and JWT logic."""
 
+import json
 from datetime import datetime, timedelta, timezone
 
 import httpx
-import json
 import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth import constants
-from src.auth.schemas import OAuthCallbackResponse, OAuthUserCreate
+from src.auth.schemas import OAuthUserCreate
 from src.config import settings
 from src.security import create_access_token, create_refresh_token
 from src.users import service as user_service
 from src.users.models import OAuthProvider, User
 
+GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
 
-async def google_oauth_flow(code: str, session: AsyncSession) -> OAuthCallbackResponse:
+
+# ─── 공용 헬퍼 ───
+
+
+async def _find_or_create_user(
+    session: AsyncSession,
+    provider: OAuthProvider,
+    provider_id: str,
+    email: str,
+    name: str | None,
+    picture: str | None,
+) -> tuple[User, bool]:
     """
-    Complete Google OAuth flow.
+    OAuth 사용자 조회 또는 생성.
+    Returns (user, is_new_user)
+    """
+    existing_user = await user_service.get_user_by_oauth(
+        session=session, provider=provider, provider_id=provider_id
+    )
 
-    1. Exchange code for access token
-    2. Get user info from Google
-    3. Check if user exists:
-       - Existing user: Return JWT tokens
-       - New user: Create active user with auto-accepted terms and return JWT tokens
+    if existing_user:
+        return existing_user, False
+
+    new_user = await create_oauth_user(
+        session=session,
+        oauth_user=OAuthUserCreate(
+            email=email,
+            full_name=name,
+            oauth_provider=provider,
+            oauth_provider_id=provider_id,
+            profile_image_url=picture,
+        ),
+    )
+    return new_user, True
+
+
+async def _generate_tokens_for_user(
+    session: AsyncSession, user: User, is_new_user: bool
+) -> dict:
+    """사용자에 대한 JWT 토큰 생성 및 DB 저장."""
+    access_token = create_access_token(subject=str(user.id))
+    refresh_token = create_refresh_token(subject=str(user.id))
+
+    await user_service.update_refresh_token(
+        session=session, db_user=user, refresh_token=refresh_token
+    )
+
+    return {
+        "is_new_user": is_new_user,
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+    }
+
+
+# ─── Google OAuth ───
+
+
+async def google_oauth_flow(code: str, session: AsyncSession) -> dict:
+    """
+    웹용 Google OAuth flow.
+    Authorization code → access token → user info → JWT 토큰 발급.
     """
     async with httpx.AsyncClient() as client:
-        # Exchange code for access token
         token_response = await client.post(
             constants.GOOGLE_TOKEN_URL,
             data={
@@ -44,7 +96,6 @@ async def google_oauth_flow(code: str, session: AsyncSession) -> OAuthCallbackRe
         token_data = token_response.json()
         access_token = token_data.get("access_token")
 
-        # Get user info from Google
         user_response = await client.get(
             constants.GOOGLE_USERINFO_URL,
             headers={"Authorization": f"Bearer {access_token}"},
@@ -55,80 +106,50 @@ async def google_oauth_flow(code: str, session: AsyncSession) -> OAuthCallbackRe
 
         user_data = user_response.json()
 
-    google_id = user_data.get("id")
-    email = user_data.get("email")
-
-    # Check if user exists
-    existing_user = await user_service.get_user_by_oauth(
-        session=session, provider=OAuthProvider.google, provider_id=google_id
-    )
-
-    # Existing user - return JWT tokens
-    if existing_user:
-        access_token_jwt = create_access_token(subject=str(existing_user.id))
-        refresh_token_jwt = create_refresh_token(subject=str(existing_user.id))
-
-        await user_service.update_tokens(
-            session=session,
-            db_user=existing_user,
-            refresh_token=refresh_token_jwt,
-        )
-
-        return OAuthCallbackResponse(
-            is_new_user=False,
-            access_token=access_token_jwt,
-            refresh_token=refresh_token_jwt,
-        )
-
-    # New user - create active user with auto-accepted terms
-    new_user = await create_oauth_user(
+    user, is_new_user = await _find_or_create_user(
         session=session,
-        oauth_user=OAuthUserCreate(
-            email=email,
-            full_name=user_data.get("name"),
-            oauth_provider=OAuthProvider.google,
-            oauth_provider_id=google_id,
-            profile_image_url=user_data.get("picture"),
-        ),
+        provider=OAuthProvider.google,
+        provider_id=user_data.get("id"),
+        email=user_data.get("email"),
+        name=user_data.get("name"),
+        picture=user_data.get("picture"),
     )
 
-    # Generate JWT tokens for new user
-    access_token_jwt = create_access_token(subject=str(new_user.id))
-    refresh_token_jwt = create_refresh_token(subject=str(new_user.id))
-
-    # Store tokens
-    await user_service.update_refresh_token(
-        session=session, db_user=new_user, refresh_token=refresh_token_jwt
-    )
-
-    return OAuthCallbackResponse(
-        is_new_user=True,
-        access_token=access_token_jwt,
-        refresh_token=refresh_token_jwt,
-    )
+    return await _generate_tokens_for_user(session, user, is_new_user)
 
 
-async def create_oauth_user(
-    *, session: AsyncSession, oauth_user: OAuthUserCreate
-) -> User:
+async def google_mobile_auth_flow(id_token: str, session: AsyncSession) -> dict:
     """
-    Create a new user from OAuth provider.
-    User is created as active with terms automatically accepted.
+    모바일용 Google 로그인.
+    네이티브 SDK에서 받은 id_token을 검증하고 JWT 토큰 발급.
     """
-    db_obj = User(
-        email=oauth_user.email,
-        full_name=oauth_user.full_name,
-        oauth_provider=oauth_user.oauth_provider,
-        oauth_provider_id=oauth_user.oauth_provider_id,
-        profile_image_url=oauth_user.profile_image_url,
-        is_active=True,  # Immediately active
-        terms_agreed=True,  # Auto-accept terms on signup
-        terms_agreed_at=datetime.now(timezone.utc),  # Record terms agreement timestamp
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            GOOGLE_TOKENINFO_URL,
+            params={"id_token": id_token},
+        )
+
+        if response.status_code != 200:
+            raise ValueError("Invalid Google ID token")
+
+        token_info = response.json()
+
+    if token_info.get("aud") != settings.GOOGLE_CLIENT_ID:
+        raise ValueError("Invalid token audience")
+
+    user, is_new_user = await _find_or_create_user(
+        session=session,
+        provider=OAuthProvider.google,
+        provider_id=token_info.get("sub"),
+        email=token_info.get("email"),
+        name=token_info.get("name"),
+        picture=token_info.get("picture"),
     )
-    session.add(db_obj)
-    await session.commit()
-    await session.refresh(db_obj)
-    return db_obj
+
+    return await _generate_tokens_for_user(session, user, is_new_user)
+
+
+# ─── Apple OAuth ───
 
 
 def generate_apple_client_secret() -> str:
@@ -149,12 +170,11 @@ def generate_apple_client_secret() -> str:
     payload = {
         "iss": settings.APPLE_TEAM_ID,
         "iat": now,
-        "exp": now + timedelta(days=180),  # Max 6 months
+        "exp": now + timedelta(days=180),
         "aud": "https://appleid.apple.com",
         "sub": settings.APPLE_CLIENT_ID,
     }
 
-    # The private key might be stored with literal \n characters in env
     private_key = settings.APPLE_PRIVATE_KEY.replace("\\n", "\n")
 
     return jwt.encode(payload, private_key, algorithm="ES256", headers=headers)
@@ -162,15 +182,10 @@ def generate_apple_client_secret() -> str:
 
 async def apple_oauth_flow(
     code: str, user_json: str | None, session: AsyncSession
-) -> OAuthCallbackResponse:
+) -> dict:
     """
-    Complete Apple OAuth flow.
-
-    1. Generate client secret (ES256 JWT)
-    2. Exchange code for access token & ID token
-    3. Decode ID token to get email and sub (Apple ID)
-    4. Handle first-time login: extract name from user_json
-    5. Find or create user
+    웹용 Apple OAuth flow.
+    Authorization code → id_token → 사용자 조회/생성 → JWT 토큰 발급.
     """
     client_secret = generate_apple_client_secret()
 
@@ -222,53 +237,80 @@ async def apple_oauth_flow(
         try:
             user_data = json.loads(user_json)
             name_obj = user_data.get("name", {})
-            
             full_name = name_obj.get("firstName", "")
             full_name += name_obj.get("lastName", "")
-                
         except json.JSONDecodeError:
             pass
 
-    # Check existing user
-    existing_user = await user_service.get_user_by_oauth(
-        session=session, provider=OAuthProvider.apple, provider_id=apple_sub
-    )
-
-    if existing_user:
-        access_token_jwt = create_access_token(subject=str(existing_user.id))
-        refresh_token_jwt = create_refresh_token(subject=str(existing_user.id))
-
-        await user_service.update_tokens(
-            session=session, db_user=existing_user, refresh_token=refresh_token_jwt
-        )
-
-        return OAuthCallbackResponse(
-            is_new_user=False,
-            access_token=access_token_jwt,
-            refresh_token=refresh_token_jwt,
-        )
-
-    # Create new user
-    new_user = await create_oauth_user(
+    user, is_new_user = await _find_or_create_user(
         session=session,
-        oauth_user=OAuthUserCreate(
-            email=email,
-            full_name=full_name,  # might be None if not first login or skipped
-            oauth_provider=OAuthProvider.apple,
-            oauth_provider_id=apple_sub,
-            profile_image_url=None,  # Apple doesn't provide avatar
-        ),
+        provider=OAuthProvider.apple,
+        provider_id=apple_sub,
+        email=email,
+        name=full_name or None,
+        picture=None,
     )
 
-    access_token_jwt = create_access_token(subject=str(new_user.id))
-    refresh_token_jwt = create_refresh_token(subject=str(new_user.id))
+    return await _generate_tokens_for_user(session, user, is_new_user)
 
-    await user_service.update_refresh_token(
-        session=session, db_user=new_user, refresh_token=refresh_token_jwt
+
+async def apple_mobile_auth_flow(
+    id_token: str, full_name: str | None, session: AsyncSession
+) -> dict:
+    """
+    모바일용 Apple 로그인.
+    네이티브 SDK에서 받은 id_token을 JWKS로 검증하고 JWT 토큰 발급.
+    """
+    try:
+        jwks_client = jwt.PyJWKClient("https://appleid.apple.com/auth/keys")
+        signing_key = jwks_client.get_signing_key_from_jwt(id_token)
+
+        decoded = jwt.decode(
+            id_token,
+            signing_key.key,
+            algorithms=["RS256"],
+            audience=settings.APPLE_CLIENT_ID,
+            issuer="https://appleid.apple.com",
+        )
+    except Exception as e:
+        raise ValueError(f"Invalid Apple ID token: {str(e)}")
+
+    apple_sub = decoded.get("sub")
+    email = decoded.get("email")
+
+    if not apple_sub or not email:
+        raise ValueError("id_token missing sub or email")
+
+    user, is_new_user = await _find_or_create_user(
+        session=session,
+        provider=OAuthProvider.apple,
+        provider_id=apple_sub,
+        email=email,
+        name=full_name,
+        picture=None,
     )
 
-    return OAuthCallbackResponse(
-        is_new_user=True,
-        access_token=access_token_jwt,
-        refresh_token=refresh_token_jwt,
+    return await _generate_tokens_for_user(session, user, is_new_user)
+
+
+# ─── OAuth 사용자 생성 ───
+
+
+async def create_oauth_user(
+    *, session: AsyncSession, oauth_user: OAuthUserCreate
+) -> User:
+    """OAuth 사용자 생성. 즉시 활성화 + 약관 자동 동의."""
+    db_obj = User(
+        email=oauth_user.email,
+        full_name=oauth_user.full_name,
+        oauth_provider=oauth_user.oauth_provider,
+        oauth_provider_id=oauth_user.oauth_provider_id,
+        profile_image_url=oauth_user.profile_image_url,
+        is_active=True,
+        terms_agreed=True,
+        terms_agreed_at=datetime.now(timezone.utc),
     )
+    session.add(db_obj)
+    await session.commit()
+    await session.refresh(db_obj)
+    return db_obj

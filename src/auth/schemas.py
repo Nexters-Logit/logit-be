@@ -1,5 +1,7 @@
 """Authentication schemas."""
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.users.schemas import OAuthProvider
@@ -27,68 +29,77 @@ class OAuthUserCreate(BaseModel):
     )
 
 
-class Token(BaseModel):
-    """Token response schema."""
-
-    access_token: str = Field(..., description="액세스 토큰")
-    refresh_token: str = Field(..., description="리프레시 토큰")
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-            }
-        }
-    )
-
-
 class TokenPayload(BaseModel):
     """Token payload schema."""
 
     sub: str | None = Field(None, description="토큰 주체 (사용자 ID)")
     type: str | None = Field(None, description="토큰 타입 (access/refresh)")
 
+
+class OAuthTokenRequest(BaseModel):
+    """임시 인증 코드로 토큰 교환 요청"""
+
+    code: str = Field(..., description="OAuth 콜백에서 받은 임시 인증 코드")
+    platform: Literal["web", "mobile"] = Field("web", description="플랫폼 (web: 쿠키, mobile: body)")
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "sub": "123e4567-e89b-12d3-a456-426614174000",
-                "type": "access",
+                "code": "a1b2c3d4e5f6...",
+                "platform": "web",
             }
         }
     )
 
 
-class RefreshTokenRequest(BaseModel):
-    """Refresh token request."""
+class GoogleMobileLoginRequest(BaseModel):
+    """모바일 Google 로그인 요청 (네이티브 SDK id_token)"""
 
-    refresh_token: str = Field(..., description="리프레시 토큰")
+    id_token: str = Field(..., description="Google Sign-In SDK에서 받은 ID 토큰")
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
             }
         }
     )
 
 
-class LogoutRequest(BaseModel):
-    """Logout request."""
+class AppleMobileLoginRequest(BaseModel):
+    """모바일 Apple 로그인 요청 (네이티브 SDK)"""
 
-    refresh_token: str = Field(..., description="리프레시 토큰")
+    id_token: str = Field(..., description="Apple Sign-In SDK에서 받은 ID 토큰")
+    full_name: str | None = Field(None, description="사용자 이름 (최초 로그인 시에만)")
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "full_name": "홍길동",
             }
         }
     )
 
 
-class OAuthCallbackResponse(BaseModel):
-    """OAuth callback response - returns JWT tokens directly."""
+class WebTokenResponse(BaseModel):
+    """웹 토큰 응답 (refresh_token은 HttpOnly 쿠키)"""
+
+    is_new_user: bool = Field(..., description="신규 사용자 여부")
+    access_token: str = Field(..., description="액세스 토큰")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "is_new_user": True,
+                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+            }
+        }
+    )
+
+
+class MobileTokenResponse(BaseModel):
+    """모바일 토큰 응답 (refresh_token body 포함)"""
 
     is_new_user: bool = Field(..., description="신규 사용자 여부")
     access_token: str = Field(..., description="액세스 토큰")

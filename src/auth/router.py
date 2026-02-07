@@ -1,13 +1,15 @@
 """인증 API 엔드포인트"""
 
+import json
+import secrets
+from urllib.parse import urlencode
 from uuid import UUID
 
-from fastapi import APIRouter, Form, HTTPException, status
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Cookie, Form, Header, HTTPException, Response, status
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from src.auth import constants, schemas, service
 from src.common.responses import (
-    RESPONSES_CRUD_WITH_AUTH,
     ERROR_400_BAD_REQUEST,
     ERROR_401_UNAUTHORIZED,
     ERROR_404_NOT_FOUND,
@@ -15,6 +17,7 @@ from src.common.responses import (
     create_responses,
 )
 from src.config import settings
+from src.database import get_redis
 from src.security import create_access_token, create_refresh_token, verify_token
 from src.users import service as user_service
 from src.users.dependencies import SessionDep
@@ -22,9 +25,41 @@ from src.users.dependencies import SessionDep
 router = APIRouter()
 
 
+def _extract_bearer_token(authorization: str | None) -> str | None:
+    """Authorization 헤더에서 Bearer 토큰 추출."""
+    if authorization and authorization.startswith("Bearer "):
+        return authorization[7:]
+    return None
+
+
+def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
+    """HttpOnly refresh token 쿠키 설정 (웹 전용)."""
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+    )
+
+
+def _delete_refresh_cookie(response: Response) -> None:
+    """refresh token 쿠키 삭제."""
+    response.delete_cookie(
+        key="refresh_token",
+        httponly=True,
+        secure=True,
+        samesite="lax",
+    )
+
+
+# ─── Google OAuth (웹 - 리디렉션 방식) ───
+
+
 @router.get(
     "/google",
-    summary="Google OAuth 로그인",
+    summary="Google OAuth 로그인 (웹)",
     responses={
         307: {"description": "Google 인증 페이지로 리디렉션"},
         501: ERROR_501_NOT_IMPLEMENTED,
@@ -33,8 +68,7 @@ router = APIRouter()
 async def google_login():
     """
     Google OAuth 로그인 페이지로 리디렉션합니다.
-
-    - Google 클라이언트 ID가 설정되지 않은 경우 501 에러를 반환합니다.
+    웹 클라이언트 전용입니다. 모바일은 POST /auth/google/mobile을 사용하세요.
     """
     if not settings.GOOGLE_CLIENT_ID:
         raise HTTPException(
@@ -55,8 +89,7 @@ async def google_login():
 
 @router.get(
     "/google/callback",
-    response_model=schemas.OAuthCallbackResponse,
-    summary="Google OAuth 콜백 처리",
+    summary="Google OAuth 콜백 처리 (웹)",
     responses=create_responses(
         {400: ERROR_400_BAD_REQUEST},
         {501: ERROR_501_NOT_IMPLEMENTED},
@@ -65,11 +98,8 @@ async def google_login():
 async def google_callback(code: str, session: SessionDep):
     """
     Google OAuth 콜백을 처리합니다.
-
-    - **code**: Google로부터 받은 인증 코드
-    - 인증 코드를 토큰으로 교환하고, 사용자 정보를 조회합니다.
-    - 신규 사용자인 경우 계정을 자동 생성합니다.
-    - JWT 액세스 토큰과 리프레시 토큰을 발급하여 반환합니다.
+    임시 인증 코드를 발급하여 프론트엔드로 리디렉션합니다.
+    프론트에서 POST /auth/token으로 토큰을 교환합니다.
     """
     if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
         raise HTTPException(
@@ -78,17 +108,75 @@ async def google_callback(code: str, session: SessionDep):
         )
 
     try:
-        return await service.google_oauth_flow(code=code, session=session)
+        result = await service.google_oauth_flow(code=code, session=session)
+    except ValueError as e:
+        error_params = urlencode({"error": str(e)})
+        return RedirectResponse(
+            url=f"https://logit.ai.kr/auth/callback?{error_params}"
+        )
+
+    # 임시 인증 코드 생성 후 Redis에 토큰 저장 (60초 TTL, 일회용)
+    temp_code = secrets.token_urlsafe(32)
+    redis = await get_redis()
+    await redis.set(
+        f"oauth:temp:{temp_code}",
+        json.dumps(result),
+        ex=60,
+    )
+
+    params = urlencode({"code": temp_code})
+    return RedirectResponse(
+        url=f"https://logit.ai.kr/auth/callback?{params}"
+    )
+
+
+# ─── Google OAuth (모바일 - SDK 토큰 방식) ───
+
+
+@router.post(
+    "/google/mobile",
+    response_model=schemas.MobileTokenResponse,
+    summary="Google 로그인 (모바일)",
+    responses=create_responses(
+        {400: ERROR_400_BAD_REQUEST},
+        {501: ERROR_501_NOT_IMPLEMENTED},
+    ),
+)
+async def google_mobile_login(
+    request: schemas.GoogleMobileLoginRequest,
+    session: SessionDep,
+):
+    """
+    모바일 네이티브 SDK에서 받은 Google ID 토큰으로 로그인합니다.
+
+    - **id_token**: Google Sign-In SDK에서 받은 ID 토큰
+    - 토큰 검증 후 JWT access_token + refresh_token을 body로 반환합니다.
+    """
+    if not settings.GOOGLE_CLIENT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Google OAuth is not configured.",
+        )
+
+    try:
+        result = await service.google_mobile_auth_flow(
+            id_token=request.id_token, session=session
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
 
+    return schemas.MobileTokenResponse(**result)
+
+
+# ─── Apple OAuth (웹 - 리디렉션 방식) ───
+
 
 @router.get(
     "/apple",
-    summary="Apple OAuth 로그인",
+    summary="Apple OAuth 로그인 (웹)",
     responses={
         307: {"description": "Apple 인증 페이지로 리디렉션"},
         501: ERROR_501_NOT_IMPLEMENTED,
@@ -97,6 +185,7 @@ async def google_callback(code: str, session: SessionDep):
 async def apple_login():
     """
     Apple OAuth 로그인 페이지로 리디렉션합니다.
+    웹 클라이언트 전용입니다. 모바일은 POST /auth/apple/mobile을 사용하세요.
     """
     if not settings.APPLE_CLIENT_ID:
         raise HTTPException(
@@ -113,15 +202,12 @@ async def apple_login():
         f"scope={constants.APPLE_SCOPES}"
     )
 
-    return RedirectResponse(
-        url=apple_auth_url,
-    )
+    return RedirectResponse(url=apple_auth_url)
 
 
 @router.post(
     "/apple/callback",
-    response_model=schemas.OAuthCallbackResponse,
-    summary="Apple OAuth 콜백 처리",
+    summary="Apple OAuth 콜백 처리 (웹)",
     responses=create_responses(
         {400: ERROR_400_BAD_REQUEST},
         {501: ERROR_501_NOT_IMPLEMENTED},
@@ -135,9 +221,7 @@ async def apple_callback(
     """
     Apple OAuth 콜백을 처리합니다.
     Apple은 POST 방식으로 콜백을 보냅니다 (form_post).
-
-    - **code**: Apple로부터 받은 인증 코드
-    - **user**: Apple이 최초 로그인 시에만 보내주는 사용자 정보 (JSON string)
+    임시 인증 코드를 발급하여 프론트엔드로 리디렉션합니다.
     """
     if not settings.APPLE_CLIENT_ID:
         raise HTTPException(
@@ -146,18 +230,125 @@ async def apple_callback(
         )
 
     try:
-        return await service.apple_oauth_flow(code=code, user_json=user, session=session)
+        result = await service.apple_oauth_flow(code=code, user_json=user, session=session)
+    except ValueError as e:
+        error_params = urlencode({"error": str(e)})
+        return RedirectResponse(
+            url=f"https://logit.ai.kr/auth/callback?{error_params}"
+        )
+
+    # 임시 인증 코드 생성 후 Redis에 토큰 저장 (60초 TTL, 일회용)
+    temp_code = secrets.token_urlsafe(32)
+    redis = await get_redis()
+    await redis.set(
+        f"oauth:temp:{temp_code}",
+        json.dumps(result),
+        ex=60,
+    )
+
+    params = urlencode({"code": temp_code})
+    return RedirectResponse(
+        url=f"https://logit.ai.kr/auth/callback?{params}"
+    )
+
+
+# ─── Apple OAuth (모바일 - SDK 토큰 방식) ───
+
+
+@router.post(
+    "/apple/mobile",
+    response_model=schemas.MobileTokenResponse,
+    summary="Apple 로그인 (모바일)",
+    responses=create_responses(
+        {400: ERROR_400_BAD_REQUEST},
+        {501: ERROR_501_NOT_IMPLEMENTED},
+    ),
+)
+async def apple_mobile_login(
+    request: schemas.AppleMobileLoginRequest,
+    session: SessionDep,
+):
+    """
+    모바일 네이티브 SDK에서 받은 Apple ID 토큰으로 로그인합니다.
+
+    - **id_token**: Apple Sign-In SDK에서 받은 ID 토큰
+    - **full_name**: 사용자 이름 (최초 로그인 시에만 Apple이 제공)
+    - 토큰 검증 후 JWT access_token + refresh_token을 body로 반환합니다.
+    """
+    if not settings.APPLE_CLIENT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Apple OAuth is not configured.",
+        )
+
+    try:
+        result = await service.apple_mobile_auth_flow(
+            id_token=request.id_token,
+            full_name=request.full_name,
+            session=session,
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
 
+    return schemas.MobileTokenResponse(**result)
+
+
+# ─── 임시 코드 → 토큰 교환 (웹/모바일 공용) ───
+
+
+@router.post(
+    "/token",
+    summary="임시 코드로 토큰 교환",
+    responses=create_responses(
+        {400: ERROR_400_BAD_REQUEST},
+    ),
+)
+async def exchange_token(request: schemas.OAuthTokenRequest):
+    """
+    OAuth 콜백에서 받은 임시 인증 코드를 JWT 토큰으로 교환합니다.
+
+    - **code**: 임시 인증 코드 (60초 내 일회용)
+    - **platform**: "web"이면 refresh_token은 HttpOnly 쿠키, "mobile"이면 body로 반환
+    """
+    redis = await get_redis()
+    key = f"oauth:temp:{request.code}"
+    data = await redis.get(key)
+
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired code.",
+        )
+
+    # 일회용이므로 즉시 삭제
+    await redis.delete(key)
+
+    token_data = json.loads(data)
+
+    if request.platform == "mobile":
+        return JSONResponse(content={
+            "is_new_user": token_data["is_new_user"],
+            "access_token": token_data["access_token"],
+            "refresh_token": token_data["refresh_token"],
+        })
+
+    # web: refresh_token은 쿠키로
+    response = JSONResponse(content={
+        "is_new_user": token_data["is_new_user"],
+        "access_token": token_data["access_token"],
+    })
+    _set_refresh_cookie(response, token_data["refresh_token"])
+    return response
+
+
+# ─── 토큰 갱신 ───
 
 
 @router.post(
     "/refresh",
-    response_model=schemas.Token,
     summary="액세스 토큰 갱신",
     responses=create_responses(
         {400: ERROR_400_BAD_REQUEST},
@@ -165,15 +356,30 @@ async def apple_callback(
         {404: ERROR_404_NOT_FOUND},
     ),
 )
-async def refresh_access_token(request: schemas.RefreshTokenRequest, session: SessionDep):
+async def refresh_access_token(
+    session: SessionDep,
+    authorization: str | None = Header(None),
+    refresh_token_cookie: str | None = Cookie(None, alias="refresh_token"),
+):
     """
-    리프레시 토큰을 사용하여 새로운 토큰을 발급합니다.
+    리프레시 토큰으로 새 액세스 토큰을 발급합니다.
 
-    - **refresh_token**: 유효한 리프레시 토큰
-    - Refresh Token Rotation 방식을 사용하여 보안을 강화합니다.
-    - 이전 리프레시 토큰은 무효화됩니다.
+    - **모바일**: Authorization: Bearer {refresh_token} 헤더로 요청 → 새 토큰 모두 body로 반환
+    - **웹**: 쿠키에서 refresh_token 읽음 → 새 쿠키 설정
+    - Refresh Token Rotation 적용 (기존 토큰 무효화)
     """
-    user_id = verify_token(request.refresh_token, token_type="refresh")
+    # 모바일: Authorization 헤더에서, 웹: 쿠키에서
+    bearer_token = _extract_bearer_token(authorization)
+    actual_token = bearer_token or refresh_token_cookie
+    is_mobile = bearer_token is not None
+
+    if not actual_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token not found.",
+        )
+
+    user_id = verify_token(actual_token, token_type="refresh")
 
     if user_id is None:
         raise HTTPException(
@@ -189,7 +395,7 @@ async def refresh_access_token(request: schemas.RefreshTokenRequest, session: Se
             detail="User not found.",
         )
 
-    if user.refresh_token != request.refresh_token:
+    if user.refresh_token != actual_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token has been revoked or already used.",
@@ -208,10 +414,19 @@ async def refresh_access_token(request: schemas.RefreshTokenRequest, session: Se
         session=session, db_user=user, refresh_token=new_refresh_token
     )
 
-    return schemas.Token(
-        access_token=new_access_token,
-        refresh_token=new_refresh_token,
-    )
+    if is_mobile:
+        return JSONResponse(content={
+            "access_token": new_access_token,
+            "refresh_token": new_refresh_token,
+        })
+
+    # web
+    response = JSONResponse(content={"access_token": new_access_token})
+    _set_refresh_cookie(response, new_refresh_token)
+    return response
+
+
+# ─── 로그아웃 ───
 
 
 @router.post(
@@ -220,24 +435,29 @@ async def refresh_access_token(request: schemas.RefreshTokenRequest, session: Se
     summary="로그아웃",
     responses={401: ERROR_401_UNAUTHORIZED},
 )
-async def logout(request: schemas.LogoutRequest, session: SessionDep):
+async def logout(
+    session: SessionDep,
+    authorization: str | None = Header(None),
+    refresh_token_cookie: str | None = Cookie(None, alias="refresh_token"),
+):
     """
     로그아웃을 처리합니다.
 
-    - **refresh_token**: 무효화할 리프레시 토큰
-    - 액세스 토큰과 리프레시 토큰을 모두 무효화하여 즉시 로그아웃 처리합니다.
+    - **모바일**: Authorization: Bearer {refresh_token} 헤더로 요청
+    - **웹**: 쿠키에서 refresh_token 읽음
+    - DB에서 리프레시 토큰을 삭제하고 쿠키를 제거합니다.
     """
-    user_id = verify_token(request.refresh_token, token_type="refresh")
+    actual_token = _extract_bearer_token(authorization) or refresh_token_cookie
 
-    if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token.",
-        )
+    if actual_token:
+        user_id = verify_token(actual_token, token_type="refresh")
+        if user_id:
+            user = await user_service.get_user_by_id(session=session, user_id=UUID(user_id))
+            if user:
+                await user_service.update_refresh_token(
+                    session=session, db_user=user, refresh_token=""
+                )
 
-    user = await user_service.get_user_by_id(session=session, user_id=UUID(user_id))
-
-    if user:
-        user_service.update_refresh_token(session=session, db_user=user, refresh_token="")
-
-    return None
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    _delete_refresh_cookie(response)
+    return response
