@@ -3,7 +3,9 @@
 import datetime as dt
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+import re
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.experience.models import ExperienceCategory, ExperienceFormatType, ExperienceType
 
@@ -32,22 +34,31 @@ class ExperienceCreate(BaseModel):
     # Free format field (required when format_type=FREE)
     content: str | None = Field(None, min_length=1, description="자유 형식 내용")
 
+    @field_validator("end_date", mode="before")
     @classmethod
-    def model_validate(cls, obj):
-        """Validate that required fields are present based on format_type."""
-        instance = super().model_validate(obj)
-
-        if instance.format_type == ExperienceFormatType.STAR:
-            if not all([instance.situation, instance.task, instance.action, instance.result]):
+    def validate_end_date(cls, v: object) -> object:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            if v.strip() == "":
+                return None
+            if not re.match(r"^\d{4}-\d{2}-\d{2}$", v.strip()):
+                raise ValueError("날짜 형식은 YYYY-MM-DD이어야 합니다.")
+            return v.strip()
+        return v
+      
+    @model_validator(mode="after")
+    def validate_format_fields(self):
+        if self.format_type == ExperienceFormatType.STAR:
+            if not all([self.situation, self.task, self.action, self.result]):
                 raise ValueError("STAR format requires: situation, task, action, result")
-        elif instance.format_type == ExperienceFormatType.PSI:
-            if not all([instance.problem, instance.solution, instance.insight]):
+        elif self.format_type == ExperienceFormatType.PSI:
+            if not all([self.problem, self.solution, self.insight]):
                 raise ValueError("PSI format requires: problem, solution, insight")
-        elif instance.format_type == ExperienceFormatType.FREE:
-            if not instance.content:
+        elif self.format_type == ExperienceFormatType.FREE:
+            if not self.content:
                 raise ValueError("FREE format requires: content")
-
-        return instance
+        return self
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -140,6 +151,19 @@ class ExperienceUpdate(BaseModel):
 
     # Free format field
     content: str | None = Field(None, min_length=1, description="자유 형식 내용")
+
+    @field_validator("end_date", mode="before")
+    @classmethod
+    def validate_end_date(cls, v: object) -> object:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            if v.strip() == "":
+                return None
+            if not re.match(r"^\d{4}-\d{2}-\d{2}$", v.strip()):
+                raise ValueError("날짜 형식은 YYYY-MM-DD이어야 합니다.")
+            return v.strip()
+        return v
 
     model_config = ConfigDict(
         json_schema_extra={

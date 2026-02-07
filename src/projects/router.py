@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 
 from src.common.responses import RESPONSES_CREATE_WITH_AUTH, RESPONSES_CRUD_WITH_AUTH
 from src.projects import service
-from src.projects.schemas import ProjectCreate, ProjectListItem, ProjectRead, ProjectUpdate
+from src.projects.schemas import ProjectCreate, ProjectCreateResponse, ProjectListItem, ProjectRead, ProjectUpdate
 from src.users.dependencies import ActiveUser, SessionDep
 
 router = APIRouter()
@@ -15,7 +15,7 @@ router = APIRouter()
 
 @router.post(
     "/",
-    response_model=ProjectRead,
+    response_model=ProjectCreateResponse,
     status_code=status.HTTP_201_CREATED,
     responses=RESPONSES_CREATE_WITH_AUTH,
     summary="프로젝트 생성",
@@ -33,6 +33,8 @@ async def create_project(
     - **recruit_notice**: 채용 공고 내용
     - **due_date**: 마감일 (선택)
     - **questions**: 문항 목록 (선택)
+
+    프로젝트 정보와 함께 생성된 문항 ID 목록을 반환합니다.
     """
     return await service.create_project(
         session=session, project_create=project_in, user_id=current_user.id

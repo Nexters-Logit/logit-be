@@ -2,6 +2,8 @@
 
 from uuid import UUID
 
+from urllib.parse import urlencode
+
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import RedirectResponse
 
@@ -78,12 +80,23 @@ async def google_callback(code: str, session: SessionDep):
         )
 
     try:
-        return await service.google_oauth_flow(code=code, session=session)
+        result = await service.google_oauth_flow(code=code, session=session)
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+        error_params = urlencode({"error": str(e)})
+        return RedirectResponse(
+            # url=f"{settings.FRONTEND_HOST}/auth/callback?{error_params}"
+            url=f"https://logit.ai.kr/auth/callback?{error_params}"
         )
+
+    params = urlencode({
+        "access_token": result.access_token,
+        "refresh_token": result.refresh_token,
+        "is_new_user": str(result.is_new_user).lower(),
+    })
+    return RedirectResponse(
+        # url=f"{settings.FRONTEND_HOST}/auth/callback?{params}"
+        url=f"https://logit.ai.kr/auth/callback?{params}"
+    )
 
 
 @router.post(

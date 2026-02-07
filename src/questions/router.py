@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, status
 from src.common.responses import RESPONSES_CREATE_WITH_AUTH, RESPONSES_CRUD_WITH_AUTH
 from src.questions import service
 from src.questions.schemas import (
+    BulkQuestionCreate,
     QuestionCreate,
     QuestionListItem,
     QuestionRead,
@@ -40,6 +41,33 @@ async def create_question(
     return await service.create_question(
         session=session,
         question_create=question_in,
+        project_id=project_id,
+        user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/bulk",
+    response_model=List[QuestionListItem],
+    status_code=status.HTTP_201_CREATED,
+    responses=RESPONSES_CREATE_WITH_AUTH,
+    summary="문항 다건 생성",
+)
+async def create_questions_bulk(
+    project_id: UUID,
+    bulk_in: BulkQuestionCreate,
+    session: SessionDep,
+    current_user: ActiveUser,
+):
+    """
+    여러 문항을 한번에 생성합니다.
+
+    - **project_id**: 문항이 속할 프로젝트의 UUID
+    - **questions**: 문항 목록
+    """
+    return await service.create_questions_bulk(
+        session=session,
+        bulk_create=bulk_in,
         project_id=project_id,
         user_id=current_user.id,
     )
