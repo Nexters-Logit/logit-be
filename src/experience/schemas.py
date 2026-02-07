@@ -5,7 +5,7 @@ from datetime import datetime
 
 import re
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from src.experience.models import ExperienceCategory, ExperienceFormatType, ExperienceType
 
@@ -109,7 +109,7 @@ class ExperienceCreatePSI(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=200, description="경험 제목")
     start_date: dt.date = Field(..., description="경험 시작 날짜")
-    end_date: dt.date = Field(..., description="경험 종료 날짜")
+    end_date: dt.date | None = Field(None, description="경험 종료 날짜")
     experience_type: ExperienceType = Field(..., description="경험 타입")
     problem: str = Field(..., min_length=1, description="문제 (PSI의 P)")
     solution: str = Field(..., min_length=1, description="해결책 (PSI의 S)")
@@ -122,7 +122,7 @@ class ExperienceCreateFree(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=200, description="경험 제목")
     start_date: dt.date = Field(..., description="경험 시작 날짜")
-    end_date: dt.date = Field(..., description="경험 종료 날짜")
+    end_date: dt.date | None = Field(None, description="경험 종료 날짜")
     experience_type: ExperienceType = Field(..., description="경험 타입")
     content: str = Field(..., min_length=1, description="자유 형식 내용")
     category: ExperienceCategory = Field(..., description="카테고리")
