@@ -261,6 +261,93 @@ def _calculate_tag_matching_score(experience_tags: str, question_tags: list[str]
     return len(matching_tags) / len(union_tags)
 
 
+def _extract_category_from_question(question_text: str, project_info: str) -> str | None:
+    """
+    Extract relevant category from question and project information using AI.
+
+    Args:
+        question_text: Question content
+        project_info: Combined project information (company, job_position, recruit_notice)
+
+    Returns:
+        Matching category string or None
+    """
+    available_categories = [
+        "고객 가치 지향",
+        "기술적 전문성",
+        "협력적 소통",
+        "주도적 실행력",
+        "논리적 분석력",
+        "창의적 문제해결",
+        "유연한 적응력",
+        "끈기있는 책임감",
+    ]
+
+    prompt = f"""다음 문항과 프로젝트 정보를 분석하여 이 문항에서 주로 평가하려는 역량 카테고리를 1개 선택해주세요.
+
+문항: {question_text}
+
+프로젝트 정보:
+{project_info}
+
+선택 가능한 카테고리:
+{', '.join(available_categories)}
+
+요구사항:
+1. 이 문항에서 가장 중요하게 평가하려는 역량 카테고리를 1개만 선택
+2. 카테고리 이름만 정확히 반환 (추가 설명 없이)
+3. 예시: "기술적 전문성"
+
+선택한 카테고리:"""
+
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "당신은 채용 문항을 분석하여 평가하려는 핵심 역량 카테고리를 추출하는 전문가입니다. 주어진 카테고리 중에서만 선택하고, 정확히 카테고리 이름만 반환합니다.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,
+            max_tokens=50,
+        )
+
+        category = response.choices[0].message.content.strip()
+
+        # Validate that returned category is from available categories
+        if category in available_categories:
+            return category
+
+        return None
+
+    except Exception as e:
+        # Fallback: return None if AI fails
+        return None
+
+
+def _calculate_category_matching_score(experience_category: str, question_category: str | None) -> float:
+    """
+    Calculate category matching score between experience and question.
+
+    Args:
+        experience_category: Experience category
+        question_category: Question-related category
+
+    Returns:
+        Matching score: 1.0 if match, 0.0 if not
+    """
+    if not question_category:
+        return 0.0
+
+    # Exact match
+    if experience_category == question_category:
+        return 1.0
+
+    return 0.0
+
+
 def create_experience(
     client: QdrantClient,
     user_id: str,
@@ -622,22 +709,24 @@ async def get_experiences_with_question_similarity(
     session: AsyncSession,
     user_id: str,
     question_id: UUID,
-    embedding_weight: float = 0.7,
-    tag_matching_weight: float = 0.3,
+    tag_bonus_multiplier: float = 1.0,
+    category_bonus_multiplier: float = 0.5,
 ) -> list[tuple[Experience, float]]:
     """
-    Get all user experiences with hybrid similarity scores (embedding + tag matching) against a specific question and its project.
+    Get all user experiences with similarity scores against a specific question and its project.
+    Uses embedding similarity as base score, with tag and category matching providing bonuses.
 
     Args:
         client: Qdrant client
         session: Database session
         user_id: Owner user ID
         question_id: Question ID to match against
-        embedding_weight: Weight for embedding similarity score (default: 0.7)
-        tag_matching_weight: Weight for tag matching score (default: 0.3)
+        tag_bonus_multiplier: Multiplier for tag matching bonus (default: 1.0, means up to 100% bonus)
+        category_bonus_multiplier: Multiplier for category matching bonus (default: 0.5, means 50% bonus)
 
     Returns:
-        List of tuples (Experience, hybrid_similarity_score) sorted by score descending
+        List of tuples (Experience, similarity_score) sorted by score descending
+        Score calculation: base_score (embedding) + tag_bonus + category_bonus
 
     Raises:
         HTTPException: If question not found, unauthorized, or search fails
@@ -680,9 +769,10 @@ async def get_experiences_with_question_similarity(
 직무: {project.job_position}
 채용공고: {project.recruit_notice}"""
 
-    # Extract relevant tags from question and project
+    # Extract relevant tags and category from question and project
     project_info = f"회사: {project.company}\n직무: {project.job_position}\n채용공고: {project.recruit_notice}"
     question_tags = _extract_tags_from_question(question.question, project_info)
+    question_category = _extract_category_from_question(question.question, project_info)
 
     # Generate query embedding
     try:
@@ -713,21 +803,26 @@ async def get_experiences_with_question_similarity(
         with_payload=True,
     ).points
 
-    # Calculate hybrid scores (embedding similarity + tag matching)
-    results_with_hybrid_scores = []
+    # Calculate final scores (base embedding score + tag bonus + category bonus)
+    results_with_scores = []
     for point in search_result:
         experience = Experience(**point.payload)
-        embedding_score = point.score
+        base_score = point.score  # Embedding similarity (0~1)
 
         # Calculate tag matching score
         tag_score = _calculate_tag_matching_score(experience.tags, question_tags)
+        tag_bonus = tag_score * tag_bonus_multiplier if tag_score > 0 else 0.0
 
-        # Combine scores with weights
-        hybrid_score = (embedding_score * embedding_weight) + (tag_score * tag_matching_weight)
+        # Calculate category matching score
+        category_score = _calculate_category_matching_score(experience.category, question_category)
+        category_bonus = category_score * category_bonus_multiplier if category_score > 0 else 0.0
 
-        results_with_hybrid_scores.append((experience, hybrid_score))
+        # Combine all scores
+        final_score = min(base_score + tag_bonus + category_bonus, 1.0)  # Cap at 1.0
 
-    # Sort by hybrid score descending
-    results_with_hybrid_scores.sort(key=lambda x: x[1], reverse=True)
+        results_with_scores.append((experience, final_score))
 
-    return results_with_hybrid_scores
+    # Sort by final score descending
+    results_with_scores.sort(key=lambda x: x[1], reverse=True)
+
+    return results_with_scores
