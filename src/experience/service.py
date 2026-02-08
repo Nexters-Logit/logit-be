@@ -165,7 +165,7 @@ def _generate_tags(experience: Experience) -> str:
 
     except Exception as e:
         # Fallback: return default tag if AI fails
-        return "전문성"
+        return "문제해결"
 
 
 def _extract_tags_from_question(question_text: str, project_info: str) -> list[str]:
