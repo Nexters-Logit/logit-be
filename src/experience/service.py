@@ -74,6 +74,17 @@ def _combine_text_for_embedding(experience: Experience) -> str:
         return base_text
 
 
+# Available tags constant - shared across functions
+AVAILABLE_TAGS = [
+    "문서작성", "일정관리", "요구사항정의", "프로세스개선", "데이터분석", "커뮤니케이션", "리서치", "문제해결", "협업도구(Notion/Jira/Slack)",
+    "프론트엔드", "백엔드", "앱개발", "인프라/클라우드", "DB설계", "트러블슈팅", "API연동", "AI/LLM", "코드리뷰", "시스템아키텍처",
+    "UX/UI", "브랜딩", "그래픽디자인", "프로토타이핑", "디자인시스템", "영상편집", "모션그래픽", "3D모델링", "사용자테스트(UT)",
+    "서비스기획", "PM/PO", "사업개발", "전략기획", "시장분석", "지표설정(KPI/OKR)", "밴치마킹", "수익모델설계",
+    "콘텐츠제작", "퍼포먼스마케팅", "SNS운영", "광고집행", "검색최적화(SEO)", "CRM", "B2B/B2C영업", "제안서작성",
+    "고객응대(CS/CX)", "서비스운영", "QA/테스트", "인사/채용", "조직문화", "재무/회계", "이벤트기획"
+]
+
+
 def _generate_tags(experience: Experience) -> str:
     """
     Generate relevant tags using AI based on experience content.
@@ -87,14 +98,7 @@ def _generate_tags(experience: Experience) -> str:
     Raises:
         HTTPException: If tag generation fails
     """
-    available_tags = [
-        "문서작성", "일정관리", "요구사항정의", "프로세스개선", "데이터분석", "커뮤니케이션", "리서치", "문제해결", "협업도구(Notion/Jira/Slack)",
-        "프론트엔드", "백엔드", "앱개발", "인프라/클라우드", "DB설계", "트러블슈팅", "API연동", "AI/LLM", "코드리뷰", "시스템아키텍처",
-        "UX/UI", "브랜딩", "그래픽디자인", "프로토타이핑", "디자인시스템", "영상편집", "모션그래픽", "3D모델링", "사용자테스트(UT)",
-        "서비스기획", "PM/PO", "사업개발", "전략기획", "시장분석", "지표설정(KPI/OKR)", "밴치마킹", "수익모델설계",
-        "콘텐츠제작", "퍼포먼스마케팅", "SNS운영", "광고집행", "검색최적화(SEO)", "CRM", "B2B/B2C영업", "제안서작성",
-        "고객응대(CS/CX)", "서비스운영", "QA/테스트", "인사/채용", "조직문화", "재무/회계", "이벤트기획"
-    ]
+    available_tags = AVAILABLE_TAGS
 
     # Build experience content based on format type
     if experience.format_type == ExperienceFormatType.STAR:
@@ -162,6 +166,99 @@ def _generate_tags(experience: Experience) -> str:
     except Exception as e:
         # Fallback: return default tag if AI fails
         return "전문성"
+
+
+def _extract_tags_from_question(question_text: str, project_info: str) -> list[str]:
+    """
+    Extract relevant tags from question and project information using AI.
+
+    Args:
+        question_text: Question content
+        project_info: Combined project information (company, job_position, recruit_notice)
+
+    Returns:
+        List of relevant tags (1-5 tags)
+    """
+    prompt = f"""다음 문항과 프로젝트 정보를 분석하여 이 문항에 답하기 위해 필요한 역량/경험 태그를 선택해주세요.
+
+문항: {question_text}
+
+프로젝트 정보:
+{project_info}
+
+선택 가능한 태그:
+{', '.join(AVAILABLE_TAGS)}
+
+요구사항:
+1. 이 문항에 답하기 위해 필요한 역량/경험 태그를 1~5개 선택
+2. 선택한 태그를 쉼표로 구분하여 반환
+3. 태그 이름만 정확히 반환 (추가 설명 없이)
+4. 예시: "백엔드, DB설계, 트러블슈팅, API연동"
+
+선택한 태그:"""
+
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "당신은 면접 문항을 분석하여 필요한 핵심 역량 태그를 추출하는 전문가입니다. 주어진 태그 중에서만 선택하고, 정확히 쉼표로 구분된 형식으로 반환합니다.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,
+            max_tokens=100,
+        )
+
+        tags = response.choices[0].message.content.strip()
+
+        # Validate that returned tags are from available tags
+        selected_tags = [tag.strip() for tag in tags.split(",")]
+        valid_tags = [tag for tag in selected_tags if tag in AVAILABLE_TAGS]
+
+        # Ensure 1-5 tags
+        if not valid_tags:
+            # Fallback: return empty list
+            return []
+        elif len(valid_tags) > 5:
+            valid_tags = valid_tags[:5]
+
+        return valid_tags
+
+    except Exception as e:
+        # Fallback: return empty list if AI fails
+        return []
+
+
+def _calculate_tag_matching_score(experience_tags: str, question_tags: list[str]) -> float:
+    """
+    Calculate tag matching score between experience and question.
+
+    Args:
+        experience_tags: Comma-separated experience tags
+        question_tags: List of question-related tags
+
+    Returns:
+        Matching score between 0.0 and 1.0
+    """
+    if not question_tags or not experience_tags:
+        return 0.0
+
+    # Parse experience tags
+    exp_tags_set = set(tag.strip() for tag in experience_tags.split(","))
+    question_tags_set = set(question_tags)
+
+    # Calculate intersection
+    matching_tags = exp_tags_set & question_tags_set
+
+    if not matching_tags:
+        return 0.0
+
+    # Score based on proportion of matching tags
+    # Use Jaccard similarity: |intersection| / |union|
+    union_tags = exp_tags_set | question_tags_set
+    return len(matching_tags) / len(union_tags)
 
 
 def create_experience(
@@ -525,18 +622,22 @@ async def get_experiences_with_question_similarity(
     session: AsyncSession,
     user_id: str,
     question_id: UUID,
+    embedding_weight: float = 0.7,
+    tag_matching_weight: float = 0.3,
 ) -> list[tuple[Experience, float]]:
     """
-    Get all user experiences with similarity scores against a specific question and its project.
+    Get all user experiences with hybrid similarity scores (embedding + tag matching) against a specific question and its project.
 
     Args:
         client: Qdrant client
         session: Database session
         user_id: Owner user ID
         question_id: Question ID to match against
+        embedding_weight: Weight for embedding similarity score (default: 0.7)
+        tag_matching_weight: Weight for tag matching score (default: 0.3)
 
     Returns:
-        List of tuples (Experience, similarity_score) sorted by score descending
+        List of tuples (Experience, hybrid_similarity_score) sorted by score descending
 
     Raises:
         HTTPException: If question not found, unauthorized, or search fails
@@ -579,6 +680,10 @@ async def get_experiences_with_question_similarity(
 직무: {project.job_position}
 채용공고: {project.recruit_notice}"""
 
+    # Extract relevant tags from question and project
+    project_info = f"회사: {project.company}\n직무: {project.job_position}\n채용공고: {project.recruit_notice}"
+    question_tags = _extract_tags_from_question(question.question, project_info)
+
     # Generate query embedding
     try:
         query_embedding = _generate_embedding(query_text)
@@ -608,11 +713,21 @@ async def get_experiences_with_question_similarity(
         with_payload=True,
     ).points
 
-    # Convert to (Experience, score) tuples
-    results = [
-        (Experience(**point.payload), point.score)
-        for point in search_result
-    ]
+    # Calculate hybrid scores (embedding similarity + tag matching)
+    results_with_hybrid_scores = []
+    for point in search_result:
+        experience = Experience(**point.payload)
+        embedding_score = point.score
 
-    # Results are already sorted by score descending from Qdrant
-    return results
+        # Calculate tag matching score
+        tag_score = _calculate_tag_matching_score(experience.tags, question_tags)
+
+        # Combine scores with weights
+        hybrid_score = (embedding_score * embedding_weight) + (tag_score * tag_matching_weight)
+
+        results_with_hybrid_scores.append((experience, hybrid_score))
+
+    # Sort by hybrid score descending
+    results_with_hybrid_scores.sort(key=lambda x: x[1], reverse=True)
+
+    return results_with_hybrid_scores
