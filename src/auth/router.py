@@ -27,6 +27,9 @@ from src.users.dependencies import SessionDep
 router = APIRouter()
 
 
+# ─── 내부 헬퍼 ───
+
+
 def _extract_bearer_token(authorization: str | None) -> str | None:
     """Authorization 헤더에서 Bearer 토큰 추출."""
     if authorization and authorization.startswith("Bearer "):
@@ -42,6 +45,7 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
         httponly=True,
         secure=True,
         samesite="lax",
+        path="/",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
     )
 
@@ -53,7 +57,27 @@ def _delete_refresh_cookie(response: Response) -> None:
         httponly=True,
         secure=True,
         samesite="lax",
+        path="/",
     )
+
+
+async def _create_oauth_state(nonce: str | None = None) -> str:
+    """OAuth state를 생성하고 Redis에 저장합니다. nonce가 있으면 함께 저장."""
+    state = secrets.token_urlsafe(32)
+    redis = await get_redis()
+    value = nonce or "1"
+    await redis.set(f"oauth:state:{state}", value, ex=300)
+    return state
+
+
+async def _verify_oauth_state(state: str) -> str | None:
+    """OAuth state를 검증하고 Redis에서 원자적으로 삭제합니다. nonce가 있으면 반환."""
+    redis = await get_redis()
+    data = await redis.getdel(f"oauth:state:{state}")
+    if not data:
+        raise OAuthError("Invalid or expired OAuth state.")
+    value = data if isinstance(data, str) else data.decode()
+    return value if value != "1" else None
 
 
 async def _store_temp_code_and_redirect(result: dict) -> RedirectResponse:
@@ -68,7 +92,15 @@ async def _store_temp_code_and_redirect(result: dict) -> RedirectResponse:
 
     params = urlencode({"code": temp_code})
     return RedirectResponse(
-        url=f"https://logit.ai.kr/auth/callback?{params}"
+        url=f"{settings.FRONTEND_CALLBACK_URL}?{params}"
+    )
+
+
+def _error_redirect(detail: str) -> RedirectResponse:
+    """에러 메시지와 함께 프론트엔드로 리디렉션."""
+    error_params = urlencode({"error": detail})
+    return RedirectResponse(
+        url=f"{settings.FRONTEND_CALLBACK_URL}?{error_params}"
     )
 
 
@@ -91,12 +123,15 @@ async def google_login():
     if not settings.GOOGLE_CLIENT_ID:
         raise OAuthProviderNotConfiguredError("Google")
 
+    state = await _create_oauth_state()
+
     google_auth_url = (
         f"{constants.GOOGLE_AUTH_URL}?"
         f"client_id={settings.GOOGLE_CLIENT_ID}&"
         f"redirect_uri={settings.GOOGLE_REDIRECT_URI}&"
         f"response_type=code&"
-        f"scope={constants.GOOGLE_SCOPES}"
+        f"scope={constants.GOOGLE_SCOPES}&"
+        f"state={state}"
     )
 
     return RedirectResponse(url=google_auth_url)
@@ -110,7 +145,7 @@ async def google_login():
         {501: ERROR_501_NOT_IMPLEMENTED},
     ),
 )
-async def google_callback(code: str, session: SessionDep):
+async def google_callback(code: str, state: str, session: SessionDep):
     """
     Google OAuth 콜백을 처리합니다.
     임시 인증 코드를 발급하여 프론트엔드로 리디렉션합니다.
@@ -120,12 +155,10 @@ async def google_callback(code: str, session: SessionDep):
         raise OAuthProviderNotConfiguredError("Google")
 
     try:
+        await _verify_oauth_state(state)
         result = await service.google_oauth_flow(code=code, session=session)
     except HTTPException as e:
-        error_params = urlencode({"error": e.detail})
-        return RedirectResponse(
-            url=f"https://logit.ai.kr/auth/callback?{error_params}"
-        )
+        return _error_redirect(e.detail)
 
     return await _store_temp_code_and_redirect(result)
 
@@ -181,13 +214,18 @@ async def apple_login():
     if not settings.APPLE_CLIENT_ID:
         raise OAuthProviderNotConfiguredError("Apple")
 
+    nonce = secrets.token_urlsafe(32)
+    state = await _create_oauth_state(nonce=nonce)
+
     apple_auth_url = (
         f"{constants.APPLE_AUTH_URL}?"
         f"client_id={settings.APPLE_CLIENT_ID}&"
         f"redirect_uri={settings.APPLE_REDIRECT_URI}&"
         f"response_type=code&"
         f"response_mode=form_post&"
-        f"scope={constants.APPLE_SCOPES}"
+        f"scope={constants.APPLE_SCOPES}&"
+        f"state={state}&"
+        f"nonce={nonce}"
     )
 
     return RedirectResponse(url=apple_auth_url)
@@ -204,6 +242,7 @@ async def apple_login():
 async def apple_callback(
     session: SessionDep,
     code: str = Form(...),
+    state: str = Form(...),
     user: str | None = Form(None),
 ):
     """
@@ -215,12 +254,12 @@ async def apple_callback(
         raise OAuthProviderNotConfiguredError("Apple")
 
     try:
-        result = await service.apple_oauth_flow(code=code, user_json=user, session=session)
-    except HTTPException as e:
-        error_params = urlencode({"error": e.detail})
-        return RedirectResponse(
-            url=f"https://logit.ai.kr/auth/callback?{error_params}"
+        nonce = await _verify_oauth_state(state)
+        result = await service.apple_oauth_flow(
+            code=code, user_json=user, session=session, nonce=nonce
         )
+    except HTTPException as e:
+        return _error_redirect(e.detail)
 
     return await _store_temp_code_and_redirect(result)
 
@@ -279,13 +318,10 @@ async def exchange_token(request: schemas.OAuthTokenRequest):
     """
     redis = await get_redis()
     key = f"oauth:temp:{request.code}"
-    data = await redis.get(key)
+    data = await redis.getdel(key)
 
     if not data:
         raise OAuthError("Invalid or expired code.")
-
-    # 일회용이므로 즉시 삭제
-    await redis.delete(key)
 
     token_data = json.loads(data)
 
