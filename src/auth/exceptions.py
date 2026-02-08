@@ -25,7 +25,7 @@ class InvalidTokenError(HTTPException):
 
 
 class OAuthProviderNotConfiguredError(HTTPException):
-    """OAuth 제공자 미설정."""
+    """OAuth 제공자 미설정"""
 
     def __init__(self, provider: str):
         super().__init__(
