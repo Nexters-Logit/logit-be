@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
-from openai import OpenAI
+from openai import AsyncOpenAI
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue, PointStruct
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,11 +19,11 @@ from src.experience.schemas import (
 from src.projects.models import Project
 from src.questions.models import Question
 
-# Initialize OpenAI client
-openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
+# Initialize OpenAI async client
+openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
 
-def _generate_embedding(text: str) -> list[float]:
+async def _generate_embedding(text: str) -> list[float]:
     """
     Generate embedding vector using OpenAI text-embedding-3-small.
 
@@ -33,7 +33,7 @@ def _generate_embedding(text: str) -> list[float]:
     Returns:
         1536-dimensional embedding vector
     """
-    response = openai_client.embeddings.create(
+    response = await openai_client.embeddings.create(
         model="text-embedding-3-small",
         input=text,
     )
@@ -43,6 +43,7 @@ def _generate_embedding(text: str) -> list[float]:
 def _combine_text_for_embedding(experience: Experience) -> str:
     """
     Combine experience fields into a single text for embedding.
+    Filters out None values to prevent "field: None" strings in embeddings.
 
     Args:
         experience: Experience object
@@ -50,28 +51,29 @@ def _combine_text_for_embedding(experience: Experience) -> str:
     Returns:
         Combined text string
     """
-    base_text = f"제목: {experience.title}\n"
+    parts = [f"제목: {experience.title}"]
 
     if experience.format_type == ExperienceFormatType.STAR:
-        return (
-            base_text
-            + f"상황: {experience.situation}\n"
-            f"과제: {experience.task}\n"
-            f"행동: {experience.action}\n"
-            f"결과: {experience.result}"
-        )
+        if experience.situation:
+            parts.append(f"상황: {experience.situation}")
+        if experience.task:
+            parts.append(f"과제: {experience.task}")
+        if experience.action:
+            parts.append(f"행동: {experience.action}")
+        if experience.result:
+            parts.append(f"결과: {experience.result}")
     elif experience.format_type == ExperienceFormatType.PSI:
-        return (
-            base_text
-            + f"문제: {experience.problem}\n"
-            f"해결책: {experience.solution}\n"
-            f"인사이트: {experience.insight}"
-        )
+        if experience.problem:
+            parts.append(f"문제: {experience.problem}")
+        if experience.solution:
+            parts.append(f"해결책: {experience.solution}")
+        if experience.insight:
+            parts.append(f"인사이트: {experience.insight}")
     elif experience.format_type == ExperienceFormatType.FREE:
-        return base_text + f"내용: {experience.content}"
-    else:
-        # Fallback to title only
-        return base_text
+        if experience.content:
+            parts.append(f"내용: {experience.content}")
+
+    return "\n".join(parts)
 
 
 # Available tags constant - shared across functions
@@ -85,7 +87,7 @@ AVAILABLE_TAGS = [
 ]
 
 
-def _generate_tags(experience: Experience) -> str:
+async def _generate_tags(experience: Experience) -> str:
     """
     Generate relevant tags using AI based on experience content.
 
@@ -135,7 +137,7 @@ def _generate_tags(experience: Experience) -> str:
 선택한 태그:"""
 
     try:
-        response = openai_client.chat.completions.create(
+        response = await openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {
@@ -157,7 +159,7 @@ def _generate_tags(experience: Experience) -> str:
         # Ensure 1-3 tags
         if not valid_tags:
             # Fallback: use first available tag
-            return available_tags[0]
+            return "문제해결"
         elif len(valid_tags) > 3:
             valid_tags = valid_tags[:3]
 
@@ -168,7 +170,7 @@ def _generate_tags(experience: Experience) -> str:
         return "문제해결"
 
 
-def _extract_tags_from_question(question_text: str, project_info: str) -> list[str]:
+async def _extract_tags_from_question(question_text: str, project_info: str) -> list[str]:
     """
     Extract relevant tags from question and project information using AI.
 
@@ -198,7 +200,7 @@ def _extract_tags_from_question(question_text: str, project_info: str) -> list[s
 선택한 태그:"""
 
     try:
-        response = openai_client.chat.completions.create(
+        response = await openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {
@@ -226,7 +228,7 @@ def _extract_tags_from_question(question_text: str, project_info: str) -> list[s
 
         return valid_tags
 
-    except Exception as e:
+    except Exception:
         # Fallback: return empty list if AI fails
         return []
 
@@ -261,7 +263,7 @@ def _calculate_tag_matching_score(experience_tags: str, question_tags: list[str]
     return len(matching_tags) / len(union_tags)
 
 
-def _extract_category_from_question(question_text: str, project_info: str) -> str | None:
+async def _extract_category_from_question(question_text: str, project_info: str) -> str | None:
     """
     Extract relevant category from question and project information using AI.
 
@@ -301,7 +303,7 @@ def _extract_category_from_question(question_text: str, project_info: str) -> st
 선택한 카테고리:"""
 
     try:
-        response = openai_client.chat.completions.create(
+        response = await openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {
@@ -348,7 +350,7 @@ def _calculate_category_matching_score(experience_category: str, question_catego
     return 0.0
 
 
-def create_experience(
+async def create_experience(
     client: QdrantClient,
     user_id: str,
     experience_create: ExperienceCreate,
@@ -378,7 +380,7 @@ def create_experience(
     )
 
     # Generate tags using AI
-    tags = _generate_tags(temp_experience)
+    tags = await _generate_tags(temp_experience)
 
     # Create final Experience object with tags
     experience = Experience(
@@ -393,7 +395,7 @@ def create_experience(
     # Generate embedding
     try:
         text = _combine_text_for_embedding(experience)
-        embedding = _generate_embedding(text)
+        embedding = await _generate_embedding(text)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -413,8 +415,6 @@ def create_experience(
     )
 
     return experience
-
-
 
 
 def get_experience(
@@ -517,7 +517,7 @@ def list_experiences(
     return experiences, total
 
 
-def update_experience(
+async def update_experience(
     client: QdrantClient,
     experience_id: str,
     user_id: str,
@@ -585,12 +585,12 @@ def update_experience(
 
     if content_changed:
         # Regenerate tags using AI
-        updated_experience.tags = _generate_tags(updated_experience)
+        updated_experience.tags = await _generate_tags(updated_experience)
 
         # Regenerate embedding
         try:
             text = _combine_text_for_embedding(updated_experience)
-            embedding = _generate_embedding(text)
+            embedding = await _generate_embedding(text)
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -616,8 +616,6 @@ def update_experience(
         )
 
     return updated_experience
-
-
 
 
 def delete_experience(
@@ -646,7 +644,7 @@ def delete_experience(
     )
 
 
-def search_experiences(
+async def search_experiences(
     client: QdrantClient,
     user_id: str,
     query: str,
@@ -669,7 +667,7 @@ def search_experiences(
     """
     # Generate query embedding
     try:
-        query_embedding = _generate_embedding(query)
+        query_embedding = await _generate_embedding(query)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -771,12 +769,12 @@ async def get_experiences_with_question_similarity(
 
     # Extract relevant tags and category from question and project
     project_info = f"회사: {project.company}\n직무: {project.job_position}\n채용공고: {project.recruit_notice}"
-    question_tags = _extract_tags_from_question(question.question, project_info)
-    question_category = _extract_category_from_question(question.question, project_info)
+    question_tags = await _extract_tags_from_question(question.question, project_info)
+    question_category = await _extract_category_from_question(question.question, project_info)
 
     # Generate query embedding
     try:
-        query_embedding = _generate_embedding(query_text)
+        query_embedding = await _generate_embedding(query_text)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

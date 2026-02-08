@@ -29,7 +29,7 @@ router = APIRouter()
     responses=RESPONSES_CREATE_WITH_AUTH,
     summary="경험 등록",
 )
-def create_experience(
+async def create_experience(
     experience_create: ExperienceCreate,
     current_user: ActiveUser,
     qdrant_client: QdrantDep,
@@ -54,7 +54,7 @@ def create_experience(
     AI가 경험 내용을 분석하여 다음 중 1~3개의 태그를 자동으로 생성합니다:
     고객 이해력, 전문성, 소통력, 실행력, 분석력, 문제해결력, 적응력, 책임감
     """
-    experience = service.create_experience(
+    experience = await service.create_experience(
         client=qdrant_client,
         user_id=str(current_user.id),
         experience_create=experience_create,
@@ -103,7 +103,7 @@ def list_experiences(
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="경험 검색",
 )
-def search_experiences(
+async def search_experiences(
     current_user: ActiveUser,
     qdrant_client: QdrantDep,
     q: str = Query(..., min_length=1, description="검색 쿼리"),
@@ -118,7 +118,7 @@ def search_experiences(
     유사도 점수와 함께 관련성 높은 순서로 결과를 반환합니다.
     각 경험은 format_type 필드를 포함하여 STAR/PSI/FREE 형식을 구분할 수 있습니다.
     """
-    results = service.search_experiences(
+    results = await service.search_experiences(
         client=qdrant_client,
         user_id=str(current_user.id),
         query=q,
@@ -180,7 +180,7 @@ def get_experience(
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="경험 수정",
 )
-def update_experience(
+async def update_experience(
     experience_id: str,
     experience_update: ExperienceUpdate,
     current_user: ActiveUser,
@@ -201,7 +201,7 @@ def update_experience(
     - AI가 태그를 자동으로 재생성합니다.
     - 시맨틱 검색을 위한 임베딩이 재생성됩니다.
     """
-    experience = service.update_experience(
+    experience = await service.update_experience(
         client=qdrant_client,
         experience_id=experience_id,
         user_id=str(current_user.id),
