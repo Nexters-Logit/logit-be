@@ -21,10 +21,32 @@ from src.security import create_access_token, create_refresh_token
 from src.users import service as user_service
 from src.users.models import OAuthProvider, User
 
-# Apple JWKS 비동기 캐시
+# JWKS 비동기 캐시 (Google / Apple 공용 패턴)
+_JWKS_CACHE_TTL = 3600  # 1시간
+
+_google_jwks_cache: dict | None = None
+_google_jwks_fetched_at: float = 0
+
 _apple_jwks_cache: dict | None = None
 _apple_jwks_fetched_at: float = 0
-_JWKS_CACHE_TTL = 3600  # 1시간
+
+
+async def _get_google_jwks() -> dict:
+    """Google JWKS를 비동기로 가져오고 캐싱합니다."""
+    global _google_jwks_cache, _google_jwks_fetched_at
+    now = time.monotonic()
+    if _google_jwks_cache and (now - _google_jwks_fetched_at) < _JWKS_CACHE_TTL:
+        return _google_jwks_cache
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(constants.GOOGLE_JWKS_URL)
+        if response.status_code != 200:
+            if _google_jwks_cache:
+                return _google_jwks_cache
+            raise OAuthError("Failed to fetch Google JWKS")
+        _google_jwks_cache = response.json()
+        _google_jwks_fetched_at = now
+        return _google_jwks_cache
 
 
 async def _get_apple_jwks() -> dict:
@@ -164,38 +186,62 @@ async def google_oauth_flow(code: str, session: AsyncSession) -> dict:
     return await _generate_tokens_for_user(session, user, is_new_user)
 
 
+async def _verify_google_id_token(id_token: str) -> dict:
+    """
+    Google id_token을 비동기 JWKS로 로컬 검증하고 디코딩된 페이로드를 반환합니다.
+    Google 공식 권장: tokeninfo 엔드포인트 대신 JWKS 로컬 검증 사용.
+    """
+    try:
+        unverified_header = jwt.get_unverified_header(id_token)
+    except jwt.PyJWTError as e:
+        raise InvalidTokenError(f"Invalid Google ID token: {e}") from e
+
+    kid = unverified_header.get("kid")
+    jwks_data = await _get_google_jwks()
+
+    signing_key = None
+    for key_data in jwks_data.get("keys", []):
+        if key_data.get("kid") == kid:
+            signing_key = PyJWK(key_data)
+            break
+
+    if not signing_key:
+        raise InvalidTokenError("No matching key found in Google JWKS")
+
+    try:
+        decoded = jwt.decode(
+            id_token,
+            signing_key.key,
+            algorithms=["RS256"],
+            audience=settings.GOOGLE_CLIENT_ID,
+            issuer=["https://accounts.google.com", "accounts.google.com"],
+        )
+    except jwt.PyJWTError as e:
+        raise InvalidTokenError(f"Invalid Google ID token: {e}") from e
+
+    if not decoded.get("sub") or not decoded.get("email"):
+        raise InvalidTokenError("Google ID token missing sub or email")
+
+    return decoded
+
+
 async def google_mobile_auth_flow(id_token: str, session: AsyncSession) -> dict:
     """
     모바일용 Google 로그인.
-    네이티브 SDK에서 받은 id_token을 검증하고 JWT 토큰 발급.
+    네이티브 SDK에서 받은 id_token을 JWKS로 로컬 검증하고 JWT 토큰 발급.
     """
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            constants.GOOGLE_TOKENINFO_URL,
-            params={"id_token": id_token},
-        )
+    decoded = await _verify_google_id_token(id_token)
 
-        if response.status_code != 200:
-            raise InvalidTokenError("Invalid Google ID token")
-
-        token_info = response.json()
-
-    if token_info.get("aud") != settings.GOOGLE_CLIENT_ID:
-        raise InvalidTokenError("Invalid token audience")
-
-    provider_id = token_info.get("sub")
-    email = token_info.get("email")
-
-    if not provider_id or not email:
-        raise InvalidTokenError("Google token missing required fields")
+    provider_id = decoded["sub"]
+    email = decoded["email"]
 
     user, is_new_user = await _find_or_create_user(
         session=session,
         provider=OAuthProvider.google,
         provider_id=provider_id,
         email=email,
-        name=token_info.get("name"),
-        picture=token_info.get("picture"),
+        name=decoded.get("name"),
+        picture=decoded.get("picture"),
     )
 
     return await _generate_tokens_for_user(session, user, is_new_user)

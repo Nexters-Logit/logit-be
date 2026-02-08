@@ -4,7 +4,7 @@
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
-GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
+GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 
 # Apple OAuth URLs
 APPLE_AUTH_URL = "https://appleid.apple.com/auth/authorize"

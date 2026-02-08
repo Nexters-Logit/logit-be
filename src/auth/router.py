@@ -125,14 +125,14 @@ async def google_login():
 
     state = await _create_oauth_state()
 
-    google_auth_url = (
-        f"{constants.GOOGLE_AUTH_URL}?"
-        f"client_id={settings.GOOGLE_CLIENT_ID}&"
-        f"redirect_uri={settings.GOOGLE_REDIRECT_URI}&"
-        f"response_type=code&"
-        f"scope={constants.GOOGLE_SCOPES}&"
-        f"state={state}"
-    )
+    params = urlencode({
+        "client_id": settings.GOOGLE_CLIENT_ID,
+        "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+        "response_type": "code",
+        "scope": constants.GOOGLE_SCOPES,
+        "state": state,
+    })
+    google_auth_url = f"{constants.GOOGLE_AUTH_URL}?{params}"
 
     return RedirectResponse(url=google_auth_url)
 
@@ -219,16 +219,16 @@ async def apple_login():
     nonce = secrets.token_urlsafe(32)
     state = await _create_oauth_state(nonce=nonce)
 
-    apple_auth_url = (
-        f"{constants.APPLE_AUTH_URL}?"
-        f"client_id={settings.APPLE_CLIENT_ID}&"
-        f"redirect_uri={settings.APPLE_REDIRECT_URI}&"
-        f"response_type=code&"
-        f"response_mode=form_post&"
-        f"scope={constants.APPLE_SCOPES}&"
-        f"state={state}&"
-        f"nonce={nonce}"
-    )
+    params = urlencode({
+        "client_id": settings.APPLE_CLIENT_ID,
+        "redirect_uri": settings.APPLE_REDIRECT_URI,
+        "response_type": "code",
+        "response_mode": "form_post",
+        "scope": constants.APPLE_SCOPES,
+        "state": state,
+        "nonce": nonce,
+    })
+    apple_auth_url = f"{constants.APPLE_AUTH_URL}?{params}"
 
     return RedirectResponse(url=apple_auth_url)
 
