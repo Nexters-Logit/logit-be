@@ -89,45 +89,6 @@ class ExperienceCreate(BaseModel):
     )
 
 
-# Deprecated schemas - kept for backward compatibility
-class ExperienceCreateSTAR(BaseModel):
-    """Deprecated: Use ExperienceCreate with format_type='STAR' instead."""
-
-    title: str = Field(..., min_length=1, max_length=200, description="경험 제목")
-    start_date: dt.date = Field(..., description="경험 시작 날짜")
-    end_date: dt.date | None = Field(None, description="경험 종료 날짜")
-    experience_type: ExperienceType = Field(..., description="경험 타입")
-    situation: str = Field(..., min_length=1, description="상황 (STAR의 S)")
-    task: str = Field(..., min_length=1, description="과제 (STAR의 T)")
-    action: str = Field(..., min_length=1, description="행동 (STAR의 A)")
-    result: str = Field(..., min_length=1, description="결과 (STAR의 R)")
-    category: ExperienceCategory = Field(..., description="카테고리")
-
-
-class ExperienceCreatePSI(BaseModel):
-    """Deprecated: Use ExperienceCreate with format_type='PSI' instead."""
-
-    title: str = Field(..., min_length=1, max_length=200, description="경험 제목")
-    start_date: dt.date = Field(..., description="경험 시작 날짜")
-    end_date: dt.date | None = Field(None, description="경험 종료 날짜")
-    experience_type: ExperienceType = Field(..., description="경험 타입")
-    problem: str = Field(..., min_length=1, description="문제 (PSI의 P)")
-    solution: str = Field(..., min_length=1, description="해결책 (PSI의 S)")
-    insight: str = Field(..., min_length=1, description="인사이트 (PSI의 I)")
-    category: ExperienceCategory = Field(..., description="카테고리")
-
-
-class ExperienceCreateFree(BaseModel):
-    """Deprecated: Use ExperienceCreate with format_type='FREE' instead."""
-
-    title: str = Field(..., min_length=1, max_length=200, description="경험 제목")
-    start_date: dt.date = Field(..., description="경험 시작 날짜")
-    end_date: dt.date | None = Field(None, description="경험 종료 날짜")
-    experience_type: ExperienceType = Field(..., description="경험 타입")
-    content: str = Field(..., min_length=1, description="자유 형식 내용")
-    category: ExperienceCategory = Field(..., description="카테고리")
-
-
 class ExperienceUpdate(BaseModel):
     """Schema for updating an existing experience (partial update). Supports all format types."""
 

@@ -516,6 +516,53 @@ def test_update_experience_success(
 
 
 @patch("src.database.get_qdrant_client")
+def test_update_star_with_invalid_psi_fields(
+    mock_get_qdrant,
+    client: TestClient,
+    auth_headers: dict,
+    test_user: User,
+    mock_qdrant_client: MagicMock,
+    mock_openai_client: MagicMock,
+):
+    """Test that updating a STAR experience with PSI fields fails."""
+    mock_get_qdrant.return_value = mock_qdrant_client
+
+    experience_id = str(uuid4())
+    mock_point = MagicMock()
+    mock_point.payload = {
+        "id": experience_id,
+        "user_id": str(test_user.id),
+        "title": "Original Title",
+        "start_date": "2024-06-01",
+        "end_date": "2024-06-15",
+        "experience_type": "동아리 활동",
+        "format_type": "STAR",
+        "situation": "Original situation",
+        "task": "Original task",
+        "action": "Original action",
+        "result": "Original result",
+        "category": "기술적 전문성",
+        "tags": "전문성",
+        "created_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    mock_qdrant_client.retrieve.return_value = [mock_point]
+
+    # Try to update STAR experience with PSI fields
+    update_data = {"problem": "This is a problem field"}
+
+    response = client.patch(
+        f"/api/v1/experiences/{experience_id}",
+        headers=auth_headers,
+        json=update_data,
+    )
+
+    assert response.status_code == 400
+    assert "STAR format does not support" in response.json()["detail"]
+    assert "problem" in response.json()["detail"]
+
+
+@patch("src.database.get_qdrant_client")
 def test_update_psi_experience_success(
     mock_get_qdrant,
     client: TestClient,
@@ -563,6 +610,52 @@ def test_update_psi_experience_success(
 
 
 @patch("src.database.get_qdrant_client")
+def test_update_psi_with_invalid_star_fields(
+    mock_get_qdrant,
+    client: TestClient,
+    auth_headers: dict,
+    test_user: User,
+    mock_qdrant_client: MagicMock,
+    mock_openai_client: MagicMock,
+):
+    """Test that updating a PSI experience with STAR fields fails."""
+    mock_get_qdrant.return_value = mock_qdrant_client
+
+    experience_id = str(uuid4())
+    mock_point = MagicMock()
+    mock_point.payload = {
+        "id": experience_id,
+        "user_id": str(test_user.id),
+        "title": "Original PSI Title",
+        "start_date": "2024-03-01",
+        "end_date": "2024-05-30",
+        "experience_type": "정규직",
+        "format_type": "PSI",
+        "problem": "Original problem",
+        "solution": "Original solution",
+        "insight": "Original insight",
+        "category": "협력적 소통",
+        "tags": "전문성",
+        "created_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    mock_qdrant_client.retrieve.return_value = [mock_point]
+
+    # Try to update PSI experience with STAR fields
+    update_data = {"situation": "This is a situation field", "task": "This is a task field"}
+
+    response = client.patch(
+        f"/api/v1/experiences/{experience_id}",
+        headers=auth_headers,
+        json=update_data,
+    )
+
+    assert response.status_code == 400
+    assert "PSI format does not support" in response.json()["detail"]
+    assert "situation" in response.json()["detail"]
+
+
+@patch("src.database.get_qdrant_client")
 def test_update_free_experience_success(
     mock_get_qdrant,
     client: TestClient,
@@ -604,6 +697,50 @@ def test_update_free_experience_success(
     data = response.json()
     assert data["content"] == "Updated content with more information about the experience"
     assert data["format_type"] == "FREE"
+
+
+@patch("src.database.get_qdrant_client")
+def test_update_free_with_invalid_star_psi_fields(
+    mock_get_qdrant,
+    client: TestClient,
+    auth_headers: dict,
+    test_user: User,
+    mock_qdrant_client: MagicMock,
+    mock_openai_client: MagicMock,
+):
+    """Test that updating a FREE experience with STAR or PSI fields fails."""
+    mock_get_qdrant.return_value = mock_qdrant_client
+
+    experience_id = str(uuid4())
+    mock_point = MagicMock()
+    mock_point.payload = {
+        "id": experience_id,
+        "user_id": str(test_user.id),
+        "title": "Original Free Title",
+        "start_date": "2024-01-10",
+        "end_date": "2024-02-20",
+        "experience_type": "개인 활동",
+        "format_type": "FREE",
+        "content": "Original content",
+        "category": "기술적 전문성",
+        "tags": "전문성",
+        "created_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    mock_qdrant_client.retrieve.return_value = [mock_point]
+
+    # Try to update FREE experience with STAR fields
+    update_data = {"action": "This is an action field"}
+
+    response = client.patch(
+        f"/api/v1/experiences/{experience_id}",
+        headers=auth_headers,
+        json=update_data,
+    )
+
+    assert response.status_code == 400
+    assert "FREE format does not support" in response.json()["detail"]
+    assert "action" in response.json()["detail"]
 
 
 @patch("src.database.get_qdrant_client")

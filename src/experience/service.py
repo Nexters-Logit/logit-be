@@ -359,6 +359,30 @@ def update_experience(
 
     # Apply updates
     update_data = experience_update.model_dump(exclude_unset=True)
+
+    # Validate format-specific fields based on existing format_type
+    if existing.format_type == ExperienceFormatType.STAR:
+        invalid_fields = {"problem", "solution", "insight", "content"} & update_data.keys()
+        if invalid_fields:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"STAR format does not support fields: {', '.join(invalid_fields)}. Only situation, task, action, result are allowed.",
+            )
+    elif existing.format_type == ExperienceFormatType.PSI:
+        invalid_fields = {"situation", "task", "action", "result", "content"} & update_data.keys()
+        if invalid_fields:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"PSI format does not support fields: {', '.join(invalid_fields)}. Only problem, solution, insight are allowed.",
+            )
+    elif existing.format_type == ExperienceFormatType.FREE:
+        invalid_fields = {"situation", "task", "action", "result", "problem", "solution", "insight"} & update_data.keys()
+        if invalid_fields:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"FREE format does not support fields: {', '.join(invalid_fields)}. Only content is allowed.",
+            )
+
     updated_experience = existing.model_copy(update=update_data)
     updated_experience.updated_at = datetime.utcnow()
 
