@@ -2,7 +2,9 @@
 
 import json
 import time
+from collections.abc import Callable, Coroutine
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import httpx
 import jwt
@@ -31,11 +33,15 @@ _apple_jwks_cache: dict | None = None
 _apple_jwks_fetched_at: float = 0
 
 
-async def _get_google_jwks() -> dict:
+async def _get_google_jwks(force_refresh: bool = False) -> dict:
     """Google JWKS를 비동기로 가져오고 캐싱합니다."""
     global _google_jwks_cache, _google_jwks_fetched_at
     now = time.monotonic()
-    if _google_jwks_cache and (now - _google_jwks_fetched_at) < _JWKS_CACHE_TTL:
+    if (
+        not force_refresh
+        and _google_jwks_cache
+        and (now - _google_jwks_fetched_at) < _JWKS_CACHE_TTL
+    ):
         return _google_jwks_cache
 
     async with httpx.AsyncClient() as client:
@@ -49,11 +55,15 @@ async def _get_google_jwks() -> dict:
         return _google_jwks_cache
 
 
-async def _get_apple_jwks() -> dict:
+async def _get_apple_jwks(force_refresh: bool = False) -> dict:
     """Apple JWKS를 비동기로 가져오고 캐싱합니다."""
     global _apple_jwks_cache, _apple_jwks_fetched_at
     now = time.monotonic()
-    if _apple_jwks_cache and (now - _apple_jwks_fetched_at) < _JWKS_CACHE_TTL:
+    if (
+        not force_refresh
+        and _apple_jwks_cache
+        and (now - _apple_jwks_fetched_at) < _JWKS_CACHE_TTL
+    ):
         return _apple_jwks_cache
 
     async with httpx.AsyncClient() as client:
@@ -65,6 +75,31 @@ async def _get_apple_jwks() -> dict:
         _apple_jwks_cache = response.json()
         _apple_jwks_fetched_at = now
         return _apple_jwks_cache
+
+
+async def _find_jwks_key(
+    kid: str | None,
+    fetch_jwks: Callable[..., Coroutine[Any, Any, dict]],
+    provider: str,
+) -> PyJWK:
+    """
+    JWKS에서 kid에 해당하는 서명 키를 찾습니다.
+    캐시에 없으면 강제 갱신 후 한 번 더 시도합니다 (키 로테이션 대응).
+    """
+    jwks_data = await fetch_jwks()
+
+    for key_data in jwks_data.get("keys", []):
+        if key_data.get("kid") == kid:
+            return PyJWK(key_data)
+
+    # kid 미스: 키 로테이션일 수 있으므로 캐시 강제 갱신 후 재시도
+    jwks_data = await fetch_jwks(force_refresh=True)
+
+    for key_data in jwks_data.get("keys", []):
+        if key_data.get("kid") == kid:
+            return PyJWK(key_data)
+
+    raise InvalidTokenError(f"No matching key found in {provider} JWKS")
 
 
 # ─── 공용 헬퍼 ───
@@ -197,16 +232,7 @@ async def _verify_google_id_token(id_token: str) -> dict:
         raise InvalidTokenError(f"Invalid Google ID token: {e}") from e
 
     kid = unverified_header.get("kid")
-    jwks_data = await _get_google_jwks()
-
-    signing_key = None
-    for key_data in jwks_data.get("keys", []):
-        if key_data.get("kid") == kid:
-            signing_key = PyJWK(key_data)
-            break
-
-    if not signing_key:
-        raise InvalidTokenError("No matching key found in Google JWKS")
+    signing_key = await _find_jwks_key(kid, _get_google_jwks, "Google")
 
     try:
         decoded = jwt.decode(
@@ -262,16 +288,7 @@ async def _verify_apple_id_token(
         raise InvalidTokenError(f"Invalid Apple ID token: {e}") from e
 
     kid = unverified_header.get("kid")
-    jwks_data = await _get_apple_jwks()
-
-    signing_key = None
-    for key_data in jwks_data.get("keys", []):
-        if key_data.get("kid") == kid:
-            signing_key = PyJWK(key_data)
-            break
-
-    if not signing_key:
-        raise InvalidTokenError("No matching key found in Apple JWKS")
+    signing_key = await _find_jwks_key(kid, _get_apple_jwks, "Apple")
 
     try:
         decoded = jwt.decode(
