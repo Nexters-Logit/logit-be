@@ -301,7 +301,7 @@ async def apple_oauth_flow(
         )
 
         if response.status_code != 200:
-            raise OAuthError(f"Failed to exchange code for token: {response.text}")
+            raise OAuthError("Failed to exchange authorization code with Apple")
 
         token_data = response.json()
         id_token = token_data.get("id_token")

@@ -159,6 +159,8 @@ async def google_callback(code: str, state: str, session: SessionDep):
         result = await service.google_oauth_flow(code=code, session=session)
     except HTTPException as e:
         return _error_redirect(e.detail)
+    except Exception:
+        return _error_redirect("Google 로그인 처리 중 오류가 발생했습니다.")
 
     return await _store_temp_code_and_redirect(result)
 
@@ -260,6 +262,8 @@ async def apple_callback(
         )
     except HTTPException as e:
         return _error_redirect(e.detail)
+    except Exception:
+        return _error_redirect("Apple 로그인 처리 중 오류가 발생했습니다.")
 
     return await _store_temp_code_and_redirect(result)
 
