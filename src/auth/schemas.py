@@ -29,13 +29,6 @@ class OAuthUserCreate(BaseModel):
     )
 
 
-class TokenPayload(BaseModel):
-    """Token payload schema."""
-
-    sub: str | None = Field(None, description="토큰 주체 (사용자 ID)")
-    type: str | None = Field(None, description="토큰 타입 (access/refresh)")
-
-
 class OAuthTokenRequest(BaseModel):
     """임시 인증 코드로 토큰 교환 요청"""
 
@@ -77,22 +70,6 @@ class AppleMobileLoginRequest(BaseModel):
             "example": {
                 "id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "full_name": "홍길동",
-            }
-        }
-    )
-
-
-class WebTokenResponse(BaseModel):
-    """웹 토큰 응답 (refresh_token은 HttpOnly 쿠키)"""
-
-    is_new_user: bool = Field(..., description="신규 사용자 여부")
-    access_token: str = Field(..., description="액세스 토큰")
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "is_new_user": True,
-                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
             }
         }
     )

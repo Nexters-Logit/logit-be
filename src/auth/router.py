@@ -9,6 +9,7 @@ from fastapi import APIRouter, Cookie, Form, Header, HTTPException, Response, st
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from src.auth import constants, schemas, service
+from src.auth.exceptions import OAuthError, OAuthProviderNotConfiguredError
 from src.common.responses import (
     ERROR_400_BAD_REQUEST,
     ERROR_401_UNAUTHORIZED,
@@ -18,6 +19,7 @@ from src.common.responses import (
 )
 from src.config import settings
 from src.database import get_redis
+from src.exceptions import AuthenticationError, InactiveUserError, UserNotFoundError
 from src.security import create_access_token, create_refresh_token, verify_token
 from src.users import service as user_service
 from src.users.dependencies import SessionDep
@@ -54,6 +56,22 @@ def _delete_refresh_cookie(response: Response) -> None:
     )
 
 
+async def _store_temp_code_and_redirect(result: dict) -> RedirectResponse:
+    """OAuth 결과를 Redis 임시 코드로 저장하고 프론트엔드로 리디렉션."""
+    temp_code = secrets.token_urlsafe(32)
+    redis = await get_redis()
+    await redis.set(
+        f"oauth:temp:{temp_code}",
+        json.dumps(result),
+        ex=60,
+    )
+
+    params = urlencode({"code": temp_code})
+    return RedirectResponse(
+        url=f"https://logit.ai.kr/auth/callback?{params}"
+    )
+
+
 # ─── Google OAuth (웹 - 리디렉션 방식) ───
 
 
@@ -71,10 +89,7 @@ async def google_login():
     웹 클라이언트 전용입니다. 모바일은 POST /auth/google/mobile을 사용하세요.
     """
     if not settings.GOOGLE_CLIENT_ID:
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="Google OAuth is not configured.",
-        )
+        raise OAuthProviderNotConfiguredError("Google")
 
     google_auth_url = (
         f"{constants.GOOGLE_AUTH_URL}?"
@@ -102,32 +117,17 @@ async def google_callback(code: str, session: SessionDep):
     프론트에서 POST /auth/token으로 토큰을 교환합니다.
     """
     if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="Google OAuth is not configured.",
-        )
+        raise OAuthProviderNotConfiguredError("Google")
 
     try:
         result = await service.google_oauth_flow(code=code, session=session)
-    except ValueError as e:
-        error_params = urlencode({"error": str(e)})
+    except HTTPException as e:
+        error_params = urlencode({"error": e.detail})
         return RedirectResponse(
             url=f"https://logit.ai.kr/auth/callback?{error_params}"
         )
 
-    # 임시 인증 코드 생성 후 Redis에 토큰 저장 (60초 TTL, 일회용)
-    temp_code = secrets.token_urlsafe(32)
-    redis = await get_redis()
-    await redis.set(
-        f"oauth:temp:{temp_code}",
-        json.dumps(result),
-        ex=60,
-    )
-
-    params = urlencode({"code": temp_code})
-    return RedirectResponse(
-        url=f"https://logit.ai.kr/auth/callback?{params}"
-    )
+    return await _store_temp_code_and_redirect(result)
 
 
 # ─── Google OAuth (모바일 - SDK 토큰 방식) ───
@@ -153,20 +153,11 @@ async def google_mobile_login(
     - 토큰 검증 후 JWT access_token + refresh_token을 body로 반환합니다.
     """
     if not settings.GOOGLE_CLIENT_ID:
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="Google OAuth is not configured.",
-        )
+        raise OAuthProviderNotConfiguredError("Google")
 
-    try:
-        result = await service.google_mobile_auth_flow(
-            id_token=request.id_token, session=session
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        )
+    result = await service.google_mobile_auth_flow(
+        id_token=request.id_token, session=session
+    )
 
     return schemas.MobileTokenResponse(**result)
 
@@ -188,10 +179,7 @@ async def apple_login():
     웹 클라이언트 전용입니다. 모바일은 POST /auth/apple/mobile을 사용하세요.
     """
     if not settings.APPLE_CLIENT_ID:
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="Apple OAuth is not configured.",
-        )
+        raise OAuthProviderNotConfiguredError("Apple")
 
     apple_auth_url = (
         f"{constants.APPLE_AUTH_URL}?"
@@ -224,32 +212,17 @@ async def apple_callback(
     임시 인증 코드를 발급하여 프론트엔드로 리디렉션합니다.
     """
     if not settings.APPLE_CLIENT_ID:
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="Apple OAuth is not configured.",
-        )
+        raise OAuthProviderNotConfiguredError("Apple")
 
     try:
         result = await service.apple_oauth_flow(code=code, user_json=user, session=session)
-    except ValueError as e:
-        error_params = urlencode({"error": str(e)})
+    except HTTPException as e:
+        error_params = urlencode({"error": e.detail})
         return RedirectResponse(
             url=f"https://logit.ai.kr/auth/callback?{error_params}"
         )
 
-    # 임시 인증 코드 생성 후 Redis에 토큰 저장 (60초 TTL, 일회용)
-    temp_code = secrets.token_urlsafe(32)
-    redis = await get_redis()
-    await redis.set(
-        f"oauth:temp:{temp_code}",
-        json.dumps(result),
-        ex=60,
-    )
-
-    params = urlencode({"code": temp_code})
-    return RedirectResponse(
-        url=f"https://logit.ai.kr/auth/callback?{params}"
-    )
+    return await _store_temp_code_and_redirect(result)
 
 
 # ─── Apple OAuth (모바일 - SDK 토큰 방식) ───
@@ -276,22 +249,13 @@ async def apple_mobile_login(
     - 토큰 검증 후 JWT access_token + refresh_token을 body로 반환합니다.
     """
     if not settings.APPLE_CLIENT_ID:
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="Apple OAuth is not configured.",
-        )
+        raise OAuthProviderNotConfiguredError("Apple")
 
-    try:
-        result = await service.apple_mobile_auth_flow(
-            id_token=request.id_token,
-            full_name=request.full_name,
-            session=session,
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        )
+    result = await service.apple_mobile_auth_flow(
+        id_token=request.id_token,
+        full_name=request.full_name,
+        session=session,
+    )
 
     return schemas.MobileTokenResponse(**result)
 
@@ -318,10 +282,7 @@ async def exchange_token(request: schemas.OAuthTokenRequest):
     data = await redis.get(key)
 
     if not data:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired code.",
-        )
+        raise OAuthError("Invalid or expired code.")
 
     # 일회용이므로 즉시 삭제
     await redis.delete(key)
@@ -374,38 +335,23 @@ async def refresh_access_token(
     is_mobile = bearer_token is not None
 
     if not actual_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token not found.",
-        )
+        raise AuthenticationError("Refresh token not found.")
 
     user_id = verify_token(actual_token, token_type="refresh")
 
     if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token.",
-        )
+        raise AuthenticationError("Invalid or expired refresh token.")
 
     user = await user_service.get_user_by_id(session=session, user_id=UUID(user_id))
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found.",
-        )
+        raise UserNotFoundError()
 
     if user.refresh_token != actual_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token has been revoked or already used.",
-        )
+        raise AuthenticationError("Refresh token has been revoked or already used.")
 
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Inactive user.",
-        )
+        raise InactiveUserError()
 
     new_access_token = create_access_token(subject=str(user.id))
     new_refresh_token = create_refresh_token(subject=str(user.id))

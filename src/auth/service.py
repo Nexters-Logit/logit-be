@@ -8,16 +8,23 @@ import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth import constants
+from src.auth.exceptions import (
+    InvalidTokenError,
+    OAuthError,
+    OAuthProviderNotConfiguredError,
+)
 from src.auth.schemas import OAuthUserCreate
 from src.config import settings
 from src.security import create_access_token, create_refresh_token
 from src.users import service as user_service
 from src.users.models import OAuthProvider, User
 
-GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
-
-
-# ─── 공용 헬퍼 ───
+# Apple JWKS 클라이언트 (모듈 레벨 캐싱 - 매 요청마다 생성하지 않음)
+_apple_jwks_client = jwt.PyJWKClient(
+    constants.APPLE_JWKS_URL,
+    cache_keys=True,
+    lifespan=3600,
+)
 
 
 async def _find_or_create_user(
@@ -70,9 +77,6 @@ async def _generate_tokens_for_user(
     }
 
 
-# ─── Google OAuth ───
-
-
 async def google_oauth_flow(code: str, session: AsyncSession) -> dict:
     """
     웹용 Google OAuth flow.
@@ -91,7 +95,7 @@ async def google_oauth_flow(code: str, session: AsyncSession) -> dict:
         )
 
         if token_response.status_code != 200:
-            raise ValueError("Failed to get access token from Google")
+            raise OAuthError("Failed to get access token from Google")
 
         token_data = token_response.json()
         access_token = token_data.get("access_token")
@@ -102,7 +106,7 @@ async def google_oauth_flow(code: str, session: AsyncSession) -> dict:
         )
 
         if user_response.status_code != 200:
-            raise ValueError("Failed to get user info from Google")
+            raise OAuthError("Failed to get user info from Google")
 
         user_data = user_response.json()
 
@@ -125,17 +129,17 @@ async def google_mobile_auth_flow(id_token: str, session: AsyncSession) -> dict:
     """
     async with httpx.AsyncClient() as client:
         response = await client.get(
-            GOOGLE_TOKENINFO_URL,
+            constants.GOOGLE_TOKENINFO_URL,
             params={"id_token": id_token},
         )
 
         if response.status_code != 200:
-            raise ValueError("Invalid Google ID token")
+            raise InvalidTokenError("Invalid Google ID token")
 
         token_info = response.json()
 
     if token_info.get("aud") != settings.GOOGLE_CLIENT_ID:
-        raise ValueError("Invalid token audience")
+        raise InvalidTokenError("Invalid token audience")
 
     user, is_new_user = await _find_or_create_user(
         session=session,
@@ -149,7 +153,28 @@ async def google_mobile_auth_flow(id_token: str, session: AsyncSession) -> dict:
     return await _generate_tokens_for_user(session, user, is_new_user)
 
 
-# ─── Apple OAuth ───
+def _verify_apple_id_token(id_token: str) -> dict:
+    """
+    Apple id_token을 JWKS로 검증하고 디코딩된 페이로드를 반환합니다.
+    sub, email이 없으면 InvalidTokenError를 발생시킵니다.
+    """
+    try:
+        signing_key = _apple_jwks_client.get_signing_key_from_jwt(id_token)
+
+        decoded = jwt.decode(
+            id_token,
+            signing_key.key,
+            algorithms=["RS256"],
+            audience=settings.APPLE_CLIENT_ID,
+            issuer="https://appleid.apple.com",
+        )
+    except Exception as e:
+        raise InvalidTokenError(f"Invalid Apple ID token: {str(e)}")
+
+    if not decoded.get("sub") or not decoded.get("email"):
+        raise InvalidTokenError("id_token missing sub or email")
+
+    return decoded
 
 
 def generate_apple_client_secret() -> str:
@@ -163,7 +188,7 @@ def generate_apple_client_secret() -> str:
         or not settings.APPLE_KEY_ID
         or not settings.APPLE_PRIVATE_KEY
     ):
-        raise ValueError("Apple OAuth is not correctly configured locally.")
+        raise OAuthProviderNotConfiguredError("Apple")
 
     now = datetime.now(timezone.utc)
     headers = {"kid": settings.APPLE_KEY_ID}
@@ -203,34 +228,17 @@ async def apple_oauth_flow(
         )
 
         if response.status_code != 200:
-            error_details = response.text
-            raise ValueError(f"Failed to exchange code for token: {error_details}")
+            raise OAuthError(f"Failed to exchange code for token: {response.text}")
 
         token_data = response.json()
         id_token = token_data.get("id_token")
 
         if not id_token:
-            raise ValueError("No id_token in response from Apple")
+            raise OAuthError("No id_token in response from Apple")
 
-        try:
-            jwks_client = jwt.PyJWKClient("https://appleid.apple.com/auth/keys")
-            signing_key = jwks_client.get_signing_key_from_jwt(id_token)
-
-            decoded = jwt.decode(
-                id_token,
-                signing_key.key,
-                algorithms=["RS256"],
-                audience=settings.APPLE_CLIENT_ID,
-                issuer="https://appleid.apple.com",
-            )
-        except Exception as e:
-            raise ValueError(f"Invalid id_token: {str(e)}")
-
-        apple_sub = decoded.get("sub")
-        email = decoded.get("email")
-
-        if not apple_sub or not email:
-            raise ValueError("id_token missing sub or email")
+        decoded = _verify_apple_id_token(id_token)
+        apple_sub = decoded["sub"]
+        email = decoded["email"]
 
     full_name = ""
     if user_json:
@@ -261,25 +269,9 @@ async def apple_mobile_auth_flow(
     모바일용 Apple 로그인.
     네이티브 SDK에서 받은 id_token을 JWKS로 검증하고 JWT 토큰 발급.
     """
-    try:
-        jwks_client = jwt.PyJWKClient("https://appleid.apple.com/auth/keys")
-        signing_key = jwks_client.get_signing_key_from_jwt(id_token)
-
-        decoded = jwt.decode(
-            id_token,
-            signing_key.key,
-            algorithms=["RS256"],
-            audience=settings.APPLE_CLIENT_ID,
-            issuer="https://appleid.apple.com",
-        )
-    except Exception as e:
-        raise ValueError(f"Invalid Apple ID token: {str(e)}")
-
-    apple_sub = decoded.get("sub")
-    email = decoded.get("email")
-
-    if not apple_sub or not email:
-        raise ValueError("id_token missing sub or email")
+    decoded = _verify_apple_id_token(id_token)
+    apple_sub = decoded["sub"]
+    email = decoded["email"]
 
     user, is_new_user = await _find_or_create_user(
         session=session,
@@ -291,9 +283,6 @@ async def apple_mobile_auth_flow(
     )
 
     return await _generate_tokens_for_user(session, user, is_new_user)
-
-
-# ─── OAuth 사용자 생성 ───
 
 
 async def create_oauth_user(
