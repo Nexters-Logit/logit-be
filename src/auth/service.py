@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 import jwt
 from jwt import PyJWK
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth import constants
@@ -132,21 +133,31 @@ async def _find_or_create_user(
 
     if email_user:
         raise OAuthError(
-            f"이미 {email_user.oauth_provider.value}(으)로 가입된 이메일입니다. "
-            f"{email_user.oauth_provider.value} 로그인을 이용해 주세요."
+            f"This email is already registered with {email_user.oauth_provider.value}. "
+            f"Please sign in with {email_user.oauth_provider.value}."
         )
 
-    new_user = await create_oauth_user(
-        session=session,
-        oauth_user=OAuthUserCreate(
-            email=email,
-            full_name=name,
-            oauth_provider=provider,
-            oauth_provider_id=provider_id,
-            profile_image_url=picture,
-        ),
-    )
-    return new_user, True
+    try:
+        new_user = await create_oauth_user(
+            session=session,
+            oauth_user=OAuthUserCreate(
+                email=email,
+                full_name=name,
+                oauth_provider=provider,
+                oauth_provider_id=provider_id,
+                profile_image_url=picture,
+            ),
+        )
+        return new_user, True
+    except IntegrityError:
+        await session.rollback()
+        # 동시 요청으로 이미 생성된 사용자를 재조회
+        existing = await user_service.get_user_by_oauth(
+            session=session, provider=provider, provider_id=provider_id
+        )
+        if existing:
+            return existing, False
+        raise OAuthError("Account creation conflict. Please try again.")
 
 
 async def _generate_tokens_for_user(
