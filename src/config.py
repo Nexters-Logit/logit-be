@@ -112,6 +112,9 @@ class Settings(BaseSettings):
     APPLE_PRIVATE_KEY: str | None = None
     APPLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/apple/callback"
 
+    # OAuth - Frontend callback (환경별 오버라이드: FRONTEND_CALLBACK_URL=https://logit.ai.kr/auth/callback)
+    FRONTEND_CALLBACK_URL: str = "http://localhost:3000/auth/callback"
+
     # OpenAI (for Langchain)
     OPENAI_API_KEY: str | None = None
     OPENAI_MODEL: str = "gpt-4o-mini"

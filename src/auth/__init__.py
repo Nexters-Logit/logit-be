@@ -1,6 +1,6 @@
 """Auth domain module."""
 
-from src.auth import constants, exceptions, router, schemas, service, utils
+from src.auth import constants, exceptions, router, schemas, service
 
 __all__ = [
     "router",
@@ -8,5 +8,4 @@ __all__ = [
     "service",
     "constants",
     "exceptions",
-    "utils",
 ]
