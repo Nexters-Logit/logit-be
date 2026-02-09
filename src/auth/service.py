@@ -193,6 +193,9 @@ async def google_oauth_flow(code: str, session: AsyncSession) -> dict:
         token_data = token_response.json()
         access_token = token_data.get("access_token")
 
+        if not access_token:
+            raise OAuthError("No access_token in Google token response")
+
         user_response = await client.get(
             constants.GOOGLE_USERINFO_URL,
             headers={"Authorization": f"Bearer {access_token}"},
