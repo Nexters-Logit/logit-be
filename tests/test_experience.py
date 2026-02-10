@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from src.experience.models import Experience, ExperienceCategory, ExperienceType
+from src.experience.models import Experience, ExperienceCategory, ExperienceFormatType, ExperienceType
 from src.experience.schemas import ExperienceCreate
 from src.projects.models import Project
 from src.questions.models import Question
@@ -67,12 +67,13 @@ def auth_headers(test_user: User) -> dict[str, str]:
 
 @pytest.fixture
 def sample_experience_data() -> dict:
-    """Sample experience data for testing."""
+    """Sample STAR experience data for testing."""
     return {
         "title": "AI 챗봇 서비스 개발",
         "start_date": "2024-06-01",
         "end_date": "2024-06-15",
         "experience_type": "동아리 활동",
+        "format_type": "STAR",
         "situation": "팀 프로젝트에서 사용자 문의 응대 자동화가 필요했습니다.",
         "task": "자연어 처리 기반 챗봇을 설계하고 구현해야 했습니다.",
         "action": "OpenAI API를 활용하여 RAG 기반 챗봇을 개발하고, FastAPI로 REST API를 구축했습니다.",
@@ -81,16 +82,47 @@ def sample_experience_data() -> dict:
     }
 
 
+@pytest.fixture
+def sample_psi_experience_data() -> dict:
+    """Sample PSI experience data for testing."""
+    return {
+        "title": "팀 협업 프로세스 개선",
+        "start_date": "2024-03-01",
+        "end_date": "2024-05-30",
+        "experience_type": "정규직",
+        "format_type": "PSI",
+        "problem": "팀원 간 커뮤니케이션이 원활하지 않아 프로젝트 진행이 지연되었습니다.",
+        "solution": "주간 스탠드업 미팅을 도입하고 Notion으로 작업 현황을 실시간 공유했습니다.",
+        "insight": "정기적인 소통과 투명한 정보 공유가 팀 생산성을 크게 향상시킨다는 것을 배웠습니다.",
+        "category": "협력적 소통",
+    }
+
+
+@pytest.fixture
+def sample_free_experience_data() -> dict:
+    """Sample free format experience data for testing."""
+    return {
+        "title": "오픈소스 프로젝트 기여",
+        "start_date": "2024-01-10",
+        "end_date": "2024-02-20",
+        "experience_type": "개인 활동",
+        "format_type": "FREE",
+        "content": "React 라이브러리의 버그를 발견하고 수정하는 PR을 제출했습니다. 커뮤니티의 피드백을 받아 코드를 개선했고, 최종적으로 메인 브랜치에 머지되었습니다. 이 과정에서 코드 리뷰 문화와 오픈소스 기여 프로세스를 깊이 이해하게 되었습니다.",
+        "category": "기술적 전문성",
+    }
+
+
 # Model Tests
-def test_experience_model_creation():
-    """Test Experience model instantiation."""
+def test_experience_model_creation_star():
+    """Test STAR format Experience model instantiation."""
     exp = Experience(
         id=str(uuid4()),
         user_id=str(uuid4()),
         title="Test Experience",
         start_date=dt.date(2024, 6, 1),
         end_date=dt.date(2024, 6, 15),
-        experience_type=ExperienceType.PROJECT,
+        experience_type=ExperienceType.FULL_TIME,
+        format_type=ExperienceFormatType.STAR,
         situation="Test situation",
         task="Test task",
         action="Test action",
@@ -102,18 +134,68 @@ def test_experience_model_creation():
     )
 
     assert exp.title == "Test Experience"
-    assert exp.experience_type == ExperienceType.PROJECT
+    assert exp.experience_type == ExperienceType.FULL_TIME
+    assert exp.format_type == ExperienceFormatType.STAR
     assert exp.category == ExperienceCategory.TECHNICAL_PROFICIENCY
     assert "전문성" in exp.tags
 
 
-def test_experience_create_schema():
-    """Test ExperienceCreate schema validation."""
+def test_experience_model_creation_psi():
+    """Test PSI format Experience model instantiation."""
+    exp = Experience(
+        id=str(uuid4()),
+        user_id=str(uuid4()),
+        title="PSI Test Experience",
+        start_date=dt.date(2024, 3, 1),
+        end_date=dt.date(2024, 5, 30),
+        experience_type=ExperienceType.FULL_TIME,
+        format_type=ExperienceFormatType.PSI,
+        problem="Test problem",
+        solution="Test solution",
+        insight="Test insight",
+        category=ExperienceCategory.COLLABORATIVE_COMMUNICATION,
+        tags="소통력, 문제해결력",
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+
+    assert exp.title == "PSI Test Experience"
+    assert exp.format_type == ExperienceFormatType.PSI
+    assert exp.problem == "Test problem"
+    assert exp.solution == "Test solution"
+    assert exp.insight == "Test insight"
+
+
+def test_experience_model_creation_free():
+    """Test free format Experience model instantiation."""
+    exp = Experience(
+        id=str(uuid4()),
+        user_id=str(uuid4()),
+        title="Free Test Experience",
+        start_date=dt.date(2024, 1, 10),
+        end_date=dt.date(2024, 2, 20),
+        experience_type=ExperienceType.OTHER,
+        format_type=ExperienceFormatType.FREE,
+        content="Test content in free format",
+        category=ExperienceCategory.TECHNICAL_PROFICIENCY,
+        tags="전문성",
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+
+    assert exp.title == "Free Test Experience"
+    assert exp.format_type == ExperienceFormatType.FREE
+    assert exp.content == "Test content in free format"
+
+
+def test_experience_create_star_schema():
+    """Test ExperienceCreate schema validation for STAR format."""
     data = {
         "title": "Test",
         "start_date": dt.date(2024, 6, 1),
         "end_date": dt.date(2024, 6, 15),
-        "experience_type": ExperienceType.PROJECT,
+        "experience_type": ExperienceType.FULL_TIME,
+        "format_type": ExperienceFormatType.STAR,
         "situation": "Situation",
         "task": "Task",
         "action": "Action",
@@ -122,7 +204,46 @@ def test_experience_create_schema():
     }
     schema = ExperienceCreate(**data)
     assert schema.title == "Test"
-    assert schema.experience_type == ExperienceType.PROJECT
+    assert schema.experience_type == ExperienceType.FULL_TIME
+    assert schema.format_type == ExperienceFormatType.STAR
+
+
+def test_experience_create_psi_schema():
+    """Test ExperienceCreate schema validation for PSI format."""
+    data = {
+        "title": "PSI Test",
+        "start_date": dt.date(2024, 3, 1),
+        "end_date": dt.date(2024, 5, 30),
+        "experience_type": ExperienceType.FULL_TIME,
+        "format_type": ExperienceFormatType.PSI,
+        "problem": "Problem",
+        "solution": "Solution",
+        "insight": "Insight",
+        "category": ExperienceCategory.COLLABORATIVE_COMMUNICATION,
+    }
+    schema = ExperienceCreate(**data)
+    assert schema.title == "PSI Test"
+    assert schema.format_type == ExperienceFormatType.PSI
+    assert schema.problem == "Problem"
+    assert schema.solution == "Solution"
+    assert schema.insight == "Insight"
+
+
+def test_experience_create_free_schema():
+    """Test ExperienceCreate schema validation for FREE format."""
+    data = {
+        "title": "Free Test",
+        "start_date": dt.date(2024, 1, 10),
+        "end_date": dt.date(2024, 2, 20),
+        "experience_type": ExperienceType.OTHER,
+        "format_type": ExperienceFormatType.FREE,
+        "content": "Free format content",
+        "category": ExperienceCategory.TECHNICAL_PROFICIENCY,
+    }
+    schema = ExperienceCreate(**data)
+    assert schema.title == "Free Test"
+    assert schema.format_type == ExperienceFormatType.FREE
+    assert schema.content == "Free format content"
 
 
 # API Endpoint Tests
@@ -148,6 +269,64 @@ def test_create_experience_success(
     data = response.json()
     assert data["title"] == sample_experience_data["title"]
     assert data["situation"] == sample_experience_data["situation"]
+    assert "tags" in data
+    assert "id" in data
+    assert "created_at" in data
+
+
+@patch("src.database.get_qdrant_client")
+def test_create_psi_experience_success(
+    mock_get_qdrant,
+    client: TestClient,
+    auth_headers: dict,
+    sample_psi_experience_data: dict,
+    mock_qdrant_client: MagicMock,
+    mock_openai_client: MagicMock,
+):
+    """Test creating a PSI format experience successfully."""
+    mock_get_qdrant.return_value = mock_qdrant_client
+
+    response = client.post(
+        "/api/v1/experiences",
+        headers=auth_headers,
+        json=sample_psi_experience_data,
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["title"] == sample_psi_experience_data["title"]
+    assert data["problem"] == sample_psi_experience_data["problem"]
+    assert data["solution"] == sample_psi_experience_data["solution"]
+    assert data["insight"] == sample_psi_experience_data["insight"]
+    assert data["format_type"] == "PSI"
+    assert "tags" in data
+    assert "id" in data
+    assert "created_at" in data
+
+
+@patch("src.database.get_qdrant_client")
+def test_create_free_experience_success(
+    mock_get_qdrant,
+    client: TestClient,
+    auth_headers: dict,
+    sample_free_experience_data: dict,
+    mock_qdrant_client: MagicMock,
+    mock_openai_client: MagicMock,
+):
+    """Test creating a free format experience successfully."""
+    mock_get_qdrant.return_value = mock_qdrant_client
+
+    response = client.post(
+        "/api/v1/experiences",
+        headers=auth_headers,
+        json=sample_free_experience_data,
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["title"] == sample_free_experience_data["title"]
+    assert data["content"] == sample_free_experience_data["content"]
+    assert data["format_type"] == "FREE"
     assert "tags" in data
     assert "id" in data
     assert "created_at" in data
@@ -199,11 +378,12 @@ def test_list_experiences_success(
         "start_date": "2024-06-01",
         "end_date": "2024-06-15",
         "experience_type": "동아리 활동",
+        "format_type": "STAR",
         "situation": "Test situation",
         "task": "Test task",
         "action": "Test action",
         "result": "Test result",
-        "category": "technical_proficiency",
+        "category": "기술적 전문성",
         "tags": "전문성, 문제해결력",
         "created_at": datetime.utcnow().isoformat(),
         "updated_at": datetime.utcnow().isoformat(),
@@ -246,11 +426,12 @@ def test_get_experience_success(
         "start_date": "2024-06-01",
         "end_date": "2024-06-15",
         "experience_type": "동아리 활동",
+        "format_type": "STAR",
         "situation": "Test situation",
         "task": "Test task",
         "action": "Test action",
         "result": "Test result",
-        "category": "technical_proficiency",
+        "category": "기술적 전문성",
         "tags": "전문성, 문제해결력",
         "created_at": datetime.utcnow().isoformat(),
         "updated_at": datetime.utcnow().isoformat(),
@@ -308,6 +489,7 @@ def test_update_experience_success(
         "start_date": "2024-06-01",
         "end_date": "2024-06-15",
         "experience_type": "동아리 활동",
+        "format_type": "STAR",
         "situation": "Original situation",
         "task": "Original task",
         "action": "Original action",
@@ -334,6 +516,234 @@ def test_update_experience_success(
 
 
 @patch("src.database.get_qdrant_client")
+def test_update_star_with_invalid_psi_fields(
+    mock_get_qdrant,
+    client: TestClient,
+    auth_headers: dict,
+    test_user: User,
+    mock_qdrant_client: MagicMock,
+    mock_openai_client: MagicMock,
+):
+    """Test that updating a STAR experience with PSI fields fails."""
+    mock_get_qdrant.return_value = mock_qdrant_client
+
+    experience_id = str(uuid4())
+    mock_point = MagicMock()
+    mock_point.payload = {
+        "id": experience_id,
+        "user_id": str(test_user.id),
+        "title": "Original Title",
+        "start_date": "2024-06-01",
+        "end_date": "2024-06-15",
+        "experience_type": "동아리 활동",
+        "format_type": "STAR",
+        "situation": "Original situation",
+        "task": "Original task",
+        "action": "Original action",
+        "result": "Original result",
+        "category": "기술적 전문성",
+        "tags": "전문성",
+        "created_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    mock_qdrant_client.retrieve.return_value = [mock_point]
+
+    # Try to update STAR experience with PSI fields
+    update_data = {"problem": "This is a problem field"}
+
+    response = client.patch(
+        f"/api/v1/experiences/{experience_id}",
+        headers=auth_headers,
+        json=update_data,
+    )
+
+    assert response.status_code == 400
+    assert "STAR format does not support" in response.json()["detail"]
+    assert "problem" in response.json()["detail"]
+
+
+@patch("src.database.get_qdrant_client")
+def test_update_psi_experience_success(
+    mock_get_qdrant,
+    client: TestClient,
+    auth_headers: dict,
+    test_user: User,
+    mock_qdrant_client: MagicMock,
+    mock_openai_client: MagicMock,
+):
+    """Test updating a PSI format experience."""
+    mock_get_qdrant.return_value = mock_qdrant_client
+
+    experience_id = str(uuid4())
+    mock_point = MagicMock()
+    mock_point.payload = {
+        "id": experience_id,
+        "user_id": str(test_user.id),
+        "title": "Original PSI Title",
+        "start_date": "2024-03-01",
+        "end_date": "2024-05-30",
+        "experience_type": "정규직",
+        "format_type": "PSI",
+        "problem": "Original problem",
+        "solution": "Original solution",
+        "insight": "Original insight",
+        "category": "협력적 소통",
+        "tags": "전문성",
+        "created_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    mock_qdrant_client.retrieve.return_value = [mock_point]
+
+    update_data = {"title": "Updated PSI Title", "insight": "Updated insight with more details"}
+
+    response = client.patch(
+        f"/api/v1/experiences/{experience_id}",
+        headers=auth_headers,
+        json=update_data,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["title"] == "Updated PSI Title"
+    assert data["insight"] == "Updated insight with more details"
+    assert data["format_type"] == "PSI"
+
+
+@patch("src.database.get_qdrant_client")
+def test_update_psi_with_invalid_star_fields(
+    mock_get_qdrant,
+    client: TestClient,
+    auth_headers: dict,
+    test_user: User,
+    mock_qdrant_client: MagicMock,
+    mock_openai_client: MagicMock,
+):
+    """Test that updating a PSI experience with STAR fields fails."""
+    mock_get_qdrant.return_value = mock_qdrant_client
+
+    experience_id = str(uuid4())
+    mock_point = MagicMock()
+    mock_point.payload = {
+        "id": experience_id,
+        "user_id": str(test_user.id),
+        "title": "Original PSI Title",
+        "start_date": "2024-03-01",
+        "end_date": "2024-05-30",
+        "experience_type": "정규직",
+        "format_type": "PSI",
+        "problem": "Original problem",
+        "solution": "Original solution",
+        "insight": "Original insight",
+        "category": "협력적 소통",
+        "tags": "전문성",
+        "created_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    mock_qdrant_client.retrieve.return_value = [mock_point]
+
+    # Try to update PSI experience with STAR fields
+    update_data = {"situation": "This is a situation field", "task": "This is a task field"}
+
+    response = client.patch(
+        f"/api/v1/experiences/{experience_id}",
+        headers=auth_headers,
+        json=update_data,
+    )
+
+    assert response.status_code == 400
+    assert "PSI format does not support" in response.json()["detail"]
+    assert "situation" in response.json()["detail"]
+
+
+@patch("src.database.get_qdrant_client")
+def test_update_free_experience_success(
+    mock_get_qdrant,
+    client: TestClient,
+    auth_headers: dict,
+    test_user: User,
+    mock_qdrant_client: MagicMock,
+    mock_openai_client: MagicMock,
+):
+    """Test updating a free format experience."""
+    mock_get_qdrant.return_value = mock_qdrant_client
+
+    experience_id = str(uuid4())
+    mock_point = MagicMock()
+    mock_point.payload = {
+        "id": experience_id,
+        "user_id": str(test_user.id),
+        "title": "Original Free Title",
+        "start_date": "2024-01-10",
+        "end_date": "2024-02-20",
+        "experience_type": "개인 활동",
+        "format_type": "FREE",
+        "content": "Original content",
+        "category": "기술적 전문성",
+        "tags": "전문성",
+        "created_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    mock_qdrant_client.retrieve.return_value = [mock_point]
+
+    update_data = {"content": "Updated content with more information about the experience"}
+
+    response = client.patch(
+        f"/api/v1/experiences/{experience_id}",
+        headers=auth_headers,
+        json=update_data,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["content"] == "Updated content with more information about the experience"
+    assert data["format_type"] == "FREE"
+
+
+@patch("src.database.get_qdrant_client")
+def test_update_free_with_invalid_star_psi_fields(
+    mock_get_qdrant,
+    client: TestClient,
+    auth_headers: dict,
+    test_user: User,
+    mock_qdrant_client: MagicMock,
+    mock_openai_client: MagicMock,
+):
+    """Test that updating a FREE experience with STAR or PSI fields fails."""
+    mock_get_qdrant.return_value = mock_qdrant_client
+
+    experience_id = str(uuid4())
+    mock_point = MagicMock()
+    mock_point.payload = {
+        "id": experience_id,
+        "user_id": str(test_user.id),
+        "title": "Original Free Title",
+        "start_date": "2024-01-10",
+        "end_date": "2024-02-20",
+        "experience_type": "개인 활동",
+        "format_type": "FREE",
+        "content": "Original content",
+        "category": "기술적 전문성",
+        "tags": "전문성",
+        "created_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    mock_qdrant_client.retrieve.return_value = [mock_point]
+
+    # Try to update FREE experience with STAR fields
+    update_data = {"action": "This is an action field"}
+
+    response = client.patch(
+        f"/api/v1/experiences/{experience_id}",
+        headers=auth_headers,
+        json=update_data,
+    )
+
+    assert response.status_code == 400
+    assert "FREE format does not support" in response.json()["detail"]
+    assert "action" in response.json()["detail"]
+
+
+@patch("src.database.get_qdrant_client")
 def test_delete_experience_success(
     mock_get_qdrant,
     client: TestClient,
@@ -353,6 +763,7 @@ def test_delete_experience_success(
         "start_date": "2024-06-01",
         "end_date": "2024-06-15",
         "experience_type": "동아리 활동",
+        "format_type": "STAR",
         "situation": "Test",
         "task": "Test",
         "action": "Test",
@@ -392,6 +803,7 @@ def test_search_experiences_success(
         "start_date": "2024-06-01",
         "end_date": "2024-06-15",
         "experience_type": "동아리 활동",
+        "format_type": "STAR",
         "situation": "Test",
         "task": "Test",
         "action": "Test",
@@ -455,6 +867,7 @@ def test_get_other_user_experience_forbidden(
         "start_date": "2024-06-01",
         "end_date": "2024-06-15",
         "experience_type": "동아리 활동",
+        "format_type": "STAR",
         "situation": "Test",
         "task": "Test",
         "action": "Test",
@@ -527,6 +940,7 @@ def test_get_experiences_by_question_success(
         "start_date": "2024-06-01",
         "end_date": "2024-06-15",
         "experience_type": "동아리 활동",
+        "format_type": "STAR",
         "situation": "Test",
         "task": "Test",
         "action": "Test",
@@ -546,6 +960,7 @@ def test_get_experiences_by_question_success(
         "start_date": "2024-05-01",
         "end_date": "2024-05-31",
         "experience_type": "인턴",
+        "format_type": "STAR",
         "situation": "Test",
         "task": "Test",
         "action": "Test",
