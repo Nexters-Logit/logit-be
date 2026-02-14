@@ -25,6 +25,7 @@ from src.projects import router as projects_router
 from src.questions import router as questions_router
 from src.users import router as users_router
 from src.chats import router as chats_router
+from src.common.slack import send_error_notification
 
 # Load logging configuration
 fileConfig('logging.ini', disable_existing_loggers=False)
@@ -122,6 +123,7 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
+
 @app.middleware("http")
 async def logging_middleware(request: Request, call_next):
     """로그 미들웨어"""
@@ -140,6 +142,7 @@ async def logging_middleware(request: Request, call_next):
             f'"{request.method} {request.url.path}" 500 {process_time:.2f}ms - Error: {e}',
             exc_info=True
         )
+        send_error_notification(request, e)
         raise
 
 if docs_auth_required:
