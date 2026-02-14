@@ -51,7 +51,7 @@ class ExperienceBase(BaseModel):
     start_date: dt.date = Field(..., description="경험 시작 날짜 (YYYY-MM-DD)")
     end_date: dt.date | None = Field(None, description="경험 종료 날짜 (YYYY-MM-DD)")
     experience_type: ExperienceType = Field(..., description="경험 타입")
-    format_type: ExperienceFormatType = Field(..., description="경험 형식 (STAR/PSI/FREE)")
+    format_type: ExperienceFormatType = Field(default=ExperienceFormatType.STAR, description="경험 형식 (STAR/PSI/FREE)")
     category: ExperienceCategory = Field(..., description="카테고리")
     tags: str = Field(..., description="AI 자동 생성 태그 (쉼표로 구분, 1~3개)")
 
