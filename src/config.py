@@ -126,6 +126,9 @@ class Settings(BaseSettings):
     # Test User IDs (채팅 제한 면제)
     TEST_USER_IDS: list[str] = []
 
+    # Sentry
+    SENTRY_DSN: str | None = None
+
     @model_validator(mode="after")
     def _enforce_non_default_secrets(self) -> Self:
         """Validate that required secrets are set."""

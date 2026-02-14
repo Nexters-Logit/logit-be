@@ -10,6 +10,7 @@ from logging.config import fileConfig
 from contextlib import asynccontextmanager
 import time
 
+import sentry_sdk
 from fastapi import Depends, FastAPI, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
@@ -28,6 +29,15 @@ from src.chats import router as chats_router
 # Load logging configuration
 fileConfig('logging.ini', disable_existing_loggers=False)
 logger = logging.getLogger(__name__)
+
+# Initialize Sentry
+if settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.ENVIRONMENT,
+        traces_sample_rate=1.0 if settings.ENVIRONMENT == "dev" else 0.1,
+        send_default_pii=False,
+    )
 
 # HTTP Basic Auth for docs
 security = HTTPBasic()
