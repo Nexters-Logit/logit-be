@@ -614,7 +614,7 @@ def list_experiences(
     )
 
     try:
-        # Scroll to get all matching points
+        # Scroll to get matching points for current page
         scroll_result = client.scroll(
             collection_name=settings.QDRANT_COLLECTION_NAME,
             scroll_filter=user_filter,
@@ -624,21 +624,17 @@ def list_experiences(
             with_vectors=False,
         )
 
-        points, next_offset = scroll_result
+        points, _ = scroll_result  # Unpack, ignore next_offset
 
         # Convert to Experience objects
         experiences = [Experience(**point.payload) for point in points]
 
-        # Get total count (approximate, Qdrant doesn't have exact count with filter)
-        # We'll count by scrolling all
-        count_result = client.scroll(
+        # Get total count using count API (more efficient than scrolling)
+        count_result = client.count(
             collection_name=settings.QDRANT_COLLECTION_NAME,
-            scroll_filter=user_filter,
-            limit=10000,  # Large limit to get all
-            with_payload=False,
-            with_vectors=False,
+            count_filter=user_filter,
         )
-        total = len(count_result[0])
+        total = count_result.count
 
         return experiences, total
     except UnexpectedResponse as e:
