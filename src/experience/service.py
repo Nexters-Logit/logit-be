@@ -1,5 +1,6 @@
 """Experience business logic."""
 
+import logging
 from datetime import datetime
 from uuid import UUID, uuid4
 
@@ -10,6 +11,9 @@ from qdrant_client.models import Filter, FieldCondition, MatchValue, PointStruct
 from qdrant_client.http.exceptions import UnexpectedResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 from src.config import settings
 from src.experience.models import Experience, ExperienceFormatType
@@ -44,29 +48,34 @@ async def _generate_embedding(text: str) -> list[float]:
         )
         return response.data[0].embedding
     except AuthenticationError as e:
+        logger.error("OpenAI API authentication failed: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="OpenAI API authentication failed. Please check API key configuration.",
         ) from e
     except RateLimitError as e:
+        logger.warning("OpenAI API rate limit exceeded: %s", e)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="OpenAI API rate limit exceeded. Please try again later.",
         ) from e
     except APIConnectionError as e:
+        logger.error("Failed to connect to OpenAI API: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Failed to connect to OpenAI API. Please try again later.",
         ) from e
     except APIError as e:
+        logger.error("OpenAI API error while generating embedding: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"OpenAI API error: {str(e)}",
+            detail="OpenAI API error occurred while generating embedding.",
         ) from e
     except Exception as e:
+        logger.exception("Unexpected error generating embedding: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error generating embedding: {str(e)}",
+            detail="Internal server error while generating embedding.",
         ) from e
 
 
@@ -452,14 +461,16 @@ async def create_experience(
             points=[point],
         )
     except UnexpectedResponse as e:
+        logger.error("Failed to store experience in Qdrant: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to store experience in vector database: {str(e)}",
+            detail="Failed to store experience in vector database. Please try again later.",
         ) from e
     except Exception as e:
+        logger.exception("Unexpected error storing experience: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error storing experience: {str(e)}",
+            detail="Internal server error while storing experience.",
         ) from e
 
     return experience
@@ -491,14 +502,16 @@ def get_experience(
             ids=[experience_id],
         )
     except UnexpectedResponse as e:
+        logger.error("Failed to retrieve experience from Qdrant (ID: %s): %s", experience_id, e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to retrieve experience from vector database: {str(e)}",
+            detail="Failed to retrieve experience from vector database. Please try again later.",
         ) from e
     except Exception as e:
+        logger.exception("Unexpected error retrieving experience (ID: %s): %s", experience_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error retrieving experience: {str(e)}",
+            detail="Internal server error while retrieving experience.",
         ) from e
 
     if not points:
@@ -579,14 +592,16 @@ def list_experiences(
 
         return experiences, total
     except UnexpectedResponse as e:
+        logger.error("Failed to list experiences from Qdrant (user: %s): %s", user_id, e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to list experiences from vector database: {str(e)}",
+            detail="Failed to list experiences from vector database. Please try again later.",
         ) from e
     except Exception as e:
+        logger.exception("Unexpected error listing experiences (user: %s): %s", user_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error listing experiences: {str(e)}",
+            detail="Internal server error while listing experiences.",
         ) from e
 
 
@@ -643,6 +658,13 @@ async def update_experience(
     updated_experience = existing.model_copy(update=update_data)
     updated_experience.updated_at = datetime.utcnow()
 
+    # Validate date range after applying updates (catches partial updates)
+    if updated_experience.end_date and updated_experience.start_date > updated_experience.end_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="start_date must be before or equal to end_date",
+        )
+
     # Check if content changed (need to regenerate embedding and tags)
     # Content fields depend on format type
     if existing.format_type == ExperienceFormatType.STAR:
@@ -680,14 +702,16 @@ async def update_experience(
                 points=[point],
             )
         except UnexpectedResponse as e:
+            logger.error("Failed to update experience in Qdrant (ID: %s): %s", experience_id, e, exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Failed to update experience in vector database: {str(e)}",
+                detail="Failed to update experience in vector database. Please try again later.",
             ) from e
         except Exception as e:
+            logger.exception("Unexpected error updating experience (ID: %s): %s", experience_id, e)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Unexpected error updating experience: {str(e)}",
+                detail="Internal server error while updating experience.",
             ) from e
     else:
         # Update payload only
@@ -698,14 +722,16 @@ async def update_experience(
                 points=[experience_id],
             )
         except UnexpectedResponse as e:
+            logger.error("Failed to update experience payload in Qdrant (ID: %s): %s", experience_id, e, exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Failed to update experience in vector database: {str(e)}",
+                detail="Failed to update experience in vector database. Please try again later.",
             ) from e
         except Exception as e:
+            logger.exception("Unexpected error updating experience payload (ID: %s): %s", experience_id, e)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Unexpected error updating experience: {str(e)}",
+                detail="Internal server error while updating experience.",
             ) from e
 
     return updated_experience
@@ -737,14 +763,16 @@ def delete_experience(
             points_selector=[experience_id],
         )
     except UnexpectedResponse as e:
+        logger.error("Failed to delete experience from Qdrant (ID: %s): %s", experience_id, e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to delete experience from vector database: {str(e)}",
+            detail="Failed to delete experience from vector database. Please try again later.",
         ) from e
     except Exception as e:
+        logger.exception("Unexpected error deleting experience (ID: %s): %s", experience_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error deleting experience: {str(e)}",
+            detail="Internal server error while deleting experience.",
         ) from e
 
 
@@ -792,14 +820,16 @@ async def search_experiences(
             with_payload=True,
         ).points
     except UnexpectedResponse as e:
+        logger.error("Failed to search experiences in Qdrant (user: %s, query: %s): %s", user_id, query, e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to search experiences in vector database: {str(e)}",
+            detail="Failed to search experiences in vector database. Please try again later.",
         ) from e
     except Exception as e:
+        logger.exception("Unexpected error searching experiences (user: %s, query: %s): %s", user_id, query, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error searching experiences: {str(e)}",
+            detail="Internal server error while searching experiences.",
         ) from e
 
     # Convert to (Experience, score) tuples
@@ -905,14 +935,16 @@ async def get_experiences_with_question_similarity(
             with_payload=True,
         ).points
     except UnexpectedResponse as e:
+        logger.error("Failed to search experiences for question matching in Qdrant (user: %s, question: %s): %s", user_id, question_id, e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to search experiences in vector database: {str(e)}",
+            detail="Failed to search experiences in vector database. Please try again later.",
         ) from e
     except Exception as e:
+        logger.exception("Unexpected error searching experiences for question matching (user: %s, question: %s): %s", user_id, question_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error searching experiences: {str(e)}",
+            detail="Internal server error while matching experiences with question.",
         ) from e
 
     # Calculate final scores (base embedding score + tag bonus + category bonus)
