@@ -16,7 +16,13 @@ from sqlmodel import select
 logger = logging.getLogger(__name__)
 
 from src.config import settings
-from src.experience.models import Experience, ExperienceFormatType
+from src.experience.models import (
+    AVAILABLE_CATEGORIES,
+    AVAILABLE_TAGS,
+    Experience,
+    ExperienceCategory,
+    ExperienceFormatType,
+)
 from src.experience.schemas import (
     ExperienceCreate,
     ExperienceUpdate,
@@ -134,29 +140,15 @@ def _combine_text_for_embedding(experience: Experience) -> str:
     return "\n".join(parts)
 
 
-# Available tags constant - shared across functions
-AVAILABLE_TAGS = [
-    "문서작성", "일정관리", "요구사항정의", "프로세스개선", "데이터분석", "커뮤니케이션", "리서치", "문제해결", "협업도구(Notion/Jira/Slack)",
-    "프론트엔드", "백엔드", "앱개발", "인프라/클라우드", "DB설계", "트러블슈팅", "API연동", "AI/LLM", "코드리뷰", "시스템아키텍처",
-    "UX/UI", "브랜딩", "그래픽디자인", "프로토타이핑", "디자인시스템", "영상편집", "모션그래픽", "3D모델링", "사용자테스트(UT)",
-    "서비스기획", "PM/PO", "사업개발", "전략기획", "시장분석", "지표설정(KPI/OKR)", "밴치마킹", "수익모델설계",
-    "콘텐츠제작", "퍼포먼스마케팅", "SNS운영", "광고집행", "검색최적화(SEO)", "CRM", "B2B/B2C영업", "제안서작성",
-    "고객응대(CS/CX)", "서비스운영", "QA/테스트", "인사/채용", "조직문화", "재무/회계", "이벤트기획"
-]
-
-
-async def _generate_tags(experience: Experience) -> str:
+async def _generate_tags_and_category(experience: Experience) -> tuple[str, ExperienceCategory]:
     """
-    Generate relevant tags using AI based on experience content.
+    Generate relevant tags and category using a single AI call based on experience content.
 
     Args:
         experience: Experience object
 
     Returns:
-        Comma-separated string of 1-3 tags
-
-    Raises:
-        HTTPException: If tag generation fails
+        Tuple of (comma-separated tags string, ExperienceCategory)
     """
     available_tags = AVAILABLE_TAGS
 
@@ -178,7 +170,7 @@ async def _generate_tags(experience: Experience) -> str:
     else:
         content = f"제목: {experience.title}"
 
-    prompt = f"""다음 경험 내용을 분석하여 가장 관련성 높은 태그를 선택해주세요.
+    prompt = f"""다음 경험 내용을 분석하여 태그와 카테고리를 선택해주세요.
 
 경험 내용:
 {content}
@@ -186,13 +178,15 @@ async def _generate_tags(experience: Experience) -> str:
 선택 가능한 태그:
 {', '.join(available_tags)}
 
+선택 가능한 카테고리:
+{', '.join(AVAILABLE_CATEGORIES)}
+
 요구사항:
 1. 경험 내용과 가장 관련성 높은 태그를 1~3개 선택
-2. 선택한 태그를 쉼표로 구분하여 반환
-3. 태그 이름만 정확히 반환 (추가 설명 없이)
-4. 예시: "벡엔드, DB설계, 트러블슈팅"
-
-선택한 태그:"""
+2. 경험 내용에서 가장 핵심적인 역량 카테고리를 1개 선택
+3. 반드시 아래 형식으로만 반환 (추가 설명 없이):
+태그: 태그1, 태그2, 태그3
+카테고리: 카테고리명"""
 
     try:
         response = await openai_client.chat.completions.create(
@@ -200,64 +194,40 @@ async def _generate_tags(experience: Experience) -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": "당신은 경험을 분석하여 핵심 역량 태그를 추출하는 전문가입니다. 주어진 태그 중에서만 선택하고, 정확히 쉼표로 구분된 형식으로 반환합니다.",
+                    "content": "당신은 경험을 분석하여 핵심 역량 태그와 카테고리를 추출하는 전문가입니다. 주어진 목록 중에서만 선택하고, 정확히 지정된 형식으로 반환합니다.",
                 },
                 {"role": "user", "content": prompt},
             ],
             temperature=0.3,
-            max_tokens=50,
+            max_tokens=100,
         )
 
-        tags = response.choices[0].message.content.strip()
+        result = response.choices[0].message.content.strip()
 
-        # Validate that returned tags are from available tags
-        selected_tags = [tag.strip() for tag in tags.split(",")]
-        valid_tags = [tag for tag in selected_tags if tag in available_tags]
+        # Parse tags
+        tags_str = "문제해결"
+        category = ExperienceCategory.CREATIVE_PROBLEM_SOLVING  # default fallback
+        for line in result.split("\n"):
+            line = line.strip()
+            if line.startswith("태그:"):
+                raw_tags = line[len("태그:"):].strip()
+                selected_tags = [tag.strip() for tag in raw_tags.split(",")]
+                valid_tags = [tag for tag in selected_tags if tag in available_tags]
+                if valid_tags:
+                    tags_str = ", ".join(valid_tags[:3])
+            elif line.startswith("카테고리:"):
+                raw_category = line[len("카테고리:"):].strip()
+                if raw_category in AVAILABLE_CATEGORIES:
+                    category = ExperienceCategory(raw_category)
 
-        # Ensure 1-3 tags
-        if not valid_tags:
-            # Fallback: use first available tag
-            return "문제해결"
-        elif len(valid_tags) > 3:
-            valid_tags = valid_tags[:3]
+        return tags_str, category
 
-        return ", ".join(valid_tags)
-
-    except AuthenticationError as e:
-        logger.error(
-            "OpenAI authentication failed while generating tags for experience (ID: %s, title: %s, format: %s): %s",
-            experience.id, experience.title, experience.format_type, e, exc_info=True
-        )
-        # Fallback for authentication error
-        return "문제해결"
-    except RateLimitError as e:
-        logger.warning(
-            "OpenAI rate limit exceeded while generating tags for experience (ID: %s, title: %s, format: %s): %s",
-            experience.id, experience.title, experience.format_type, e
-        )
-        # Fallback for rate limit
-        return "문제해결"
-    except APIConnectionError as e:
-        logger.error(
-            "Failed to connect to OpenAI while generating tags for experience (ID: %s, title: %s, format: %s): %s",
-            experience.id, experience.title, experience.format_type, e, exc_info=True
-        )
-        # Fallback for connection error
-        return "문제해결"
-    except APIError as e:
-        logger.error(
-            "OpenAI API error while generating tags for experience (ID: %s, title: %s, format: %s): %s",
-            experience.id, experience.title, experience.format_type, e, exc_info=True
-        )
-        # Fallback for API error
-        return "문제해결"
     except Exception as e:
-        logger.exception(
-            "Unexpected error generating tags for experience (ID: %s, title: %s, format: %s): %s",
-            experience.id, experience.title, experience.format_type, e
+        logger.warning(
+            "Failed to generate tags/category for experience (ID: %s, format: %s): %s",
+            experience.id, experience.format_type, e, exc_info=True
         )
-        # Fallback: return default tag if AI fails
-        return "문제해결"
+        return "문제해결", ExperienceCategory.CREATIVE_PROBLEM_SOLVING
 
 
 async def _extract_tags_from_question(question_text: str, project_info: str) -> list[str]:
@@ -368,17 +338,6 @@ async def _extract_category_from_question(question_text: str, project_info: str)
     Returns:
         Matching category string or None
     """
-    available_categories = [
-        "고객 가치 지향",
-        "기술적 전문성",
-        "협력적 소통",
-        "주도적 실행력",
-        "논리적 분석력",
-        "창의적 문제해결",
-        "유연한 적응력",
-        "끈기있는 책임감",
-    ]
-
     prompt = f"""다음 문항과 프로젝트 정보를 분석하여 이 문항에서 주로 평가하려는 역량 카테고리를 1개 선택해주세요.
 
 문항: {question_text}
@@ -387,7 +346,7 @@ async def _extract_category_from_question(question_text: str, project_info: str)
 {project_info}
 
 선택 가능한 카테고리:
-{', '.join(available_categories)}
+{', '.join(AVAILABLE_CATEGORIES)}
 
 요구사항:
 1. 이 문항에서 가장 중요하게 평가하려는 역량 카테고리를 1개만 선택
@@ -413,7 +372,7 @@ async def _extract_category_from_question(question_text: str, project_info: str)
         category = response.choices[0].message.content.strip()
 
         # Validate that returned category is from available categories
-        if category in available_categories:
+        if category in AVAILABLE_CATEGORIES:
             return category
 
         return None
@@ -467,31 +426,32 @@ async def create_experience(
     Raises:
         HTTPException: If OpenAI API fails
     """
-    # Create temporary Experience object for tag generation
+    now = datetime.utcnow()
+    exp_id = str(uuid4())
+
+    # Create temporary Experience object for AI generation
     temp_experience = Experience(
-        id=str(uuid4()),
+        id=exp_id,
         user_id=user_id,
         **experience_create.model_dump(),
-        tags="",  # Will be generated
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        category=ExperienceCategory.CREATIVE_PROBLEM_SOLVING,  # placeholder
+        tags="",  # placeholder
+        created_at=now,
+        updated_at=now,
     )
 
-    # Generate tags using AI
-    try:
-        tags = await _generate_tags(temp_experience)
-    except Exception as e:
-        # Use fallback tag if tag generation fails
-        tags = "문제해결"
+    # Generate tags and category using AI (single call)
+    tags, category = await _generate_tags_and_category(temp_experience)
 
-    # Create final Experience object with tags
+    # Create final Experience object with AI-generated tags and category
     experience = Experience(
-        id=temp_experience.id,
+        id=exp_id,
         user_id=user_id,
         **experience_create.model_dump(),
+        category=category,
         tags=tags,
-        created_at=temp_experience.created_at,
-        updated_at=temp_experience.updated_at,
+        created_at=now,
+        updated_at=now,
     )
 
     # Generate embedding
@@ -725,11 +685,13 @@ async def update_experience(
     content_changed = any(field in update_data for field in content_fields)
 
     if content_changed:
-        # Regenerate tags using AI
+        # Regenerate tags and category using AI (single call)
         try:
-            updated_experience.tags = await _generate_tags(updated_experience)
+            tags, category = await _generate_tags_and_category(updated_experience)
+            updated_experience.tags = tags
+            updated_experience.category = category
         except Exception:
-            # Keep existing tags if regeneration fails
+            # Keep existing tags/category if regeneration fails
             pass
 
         # Regenerate embedding
