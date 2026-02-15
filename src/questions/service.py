@@ -140,6 +140,19 @@ async def update_question(
     return db_question
 
 
+async def toggle_question_complete(
+    session: AsyncSession, db_question: Question
+) -> Question:
+    """문항 작성완료 토글"""
+    db_question.is_completed = not db_question.is_completed
+    db_question.updated_at = datetime.now(timezone.utc)
+
+    session.add(db_question)
+    await session.commit()
+    await session.refresh(db_question)
+    return db_question
+
+
 async def delete_question(
     session: AsyncSession, db_question: Question
 ) -> Question:

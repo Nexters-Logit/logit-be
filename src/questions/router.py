@@ -162,6 +162,41 @@ async def update_question(
     )
 
 
+@router.patch(
+    "/{question_id}/complete",
+    response_model=QuestionRead,
+    responses=RESPONSES_CRUD_WITH_AUTH,
+    summary="문항 작성완료 토글",
+)
+async def toggle_question_complete(
+    project_id: UUID,
+    question_id: UUID,
+    session: SessionDep,
+    current_user: ActiveUser,
+):
+    """
+    문항의 작성완료 상태를 토글합니다.
+
+    - **project_id**: 프로젝트의 UUID
+    - **question_id**: 토글할 문항의 UUID
+    - `is_completed`가 `False`이면 `True`로, `True`이면 `False`로 변경
+    """
+    question = await service.get_question(
+        session=session,
+        question_id=question_id,
+        project_id=project_id,
+        user_id=current_user.id,
+    )
+    if not question:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found.",
+        )
+    return await service.toggle_question_complete(
+        session=session, db_question=question
+    )
+
+
 @router.delete(
     "/{question_id}",
     status_code=status.HTTP_204_NO_CONTENT,

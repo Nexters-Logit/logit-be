@@ -22,6 +22,7 @@ class Question(SQLModel, table=True):
         sa_column=Column(Text, nullable=True),
         description="자기소개서 답변",
     )
+    is_completed: bool = Field(default=False, index=True, description="작성 완료 여부")
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),

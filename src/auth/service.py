@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth import constants
+from src.auth.utils import get_oauth_redirect_uri
 from src.auth.exceptions import (
     InvalidTokenError,
     OAuthError,
@@ -193,7 +194,7 @@ async def google_oauth_flow(code: str, session: AsyncSession) -> dict:
                 "code": code,
                 "client_id": settings.GOOGLE_CLIENT_ID,
                 "client_secret": settings.GOOGLE_CLIENT_SECRET,
-                "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+                "redirect_uri": get_oauth_redirect_uri("google"),
                 "grant_type": "authorization_code",
             },
         )
@@ -372,7 +373,7 @@ async def apple_oauth_flow(
                 "client_secret": client_secret,
                 "code": code,
                 "grant_type": "authorization_code",
-                "redirect_uri": settings.APPLE_REDIRECT_URI,
+                "redirect_uri": get_oauth_redirect_uri("apple"),
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )

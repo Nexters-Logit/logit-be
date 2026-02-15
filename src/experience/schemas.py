@@ -18,7 +18,6 @@ class ExperienceCreate(BaseModel):
     end_date: dt.date | None = Field(None, description="경험 종료 날짜")
     experience_type: ExperienceType = Field(..., description="경험 타입")
     format_type: ExperienceFormatType = Field(..., description="경험 형식 (STAR/PSI/FREE)")
-    category: ExperienceCategory = Field(..., description="카테고리")
 
     # STAR format fields (required when format_type=STAR)
     situation: str | None = Field(None, min_length=1, max_length=5000, description="상황 (STAR의 S)")
@@ -76,7 +75,6 @@ class ExperienceCreate(BaseModel):
                     "end_date": "2024-06-15",
                     "experience_type": "동아리 활동",
                     "format_type": "STAR",
-                    "category": "기술적 전문성",
                     "tags": "AI/LLM, API연동, 백엔드",
                     "created_at": "2026-02-06T06:16:41.312815",
                     "updated_at": "2026-02-06T06:16:41.312816",
@@ -102,7 +100,6 @@ class ExperienceUpdate(BaseModel):
     start_date: dt.date | None = Field(None, description="경험 시작 날짜")
     end_date: dt.date | None = Field(None, description="경험 종료 날짜")
     experience_type: ExperienceType | None = Field(None, description="경험 타입")
-    category: ExperienceCategory | None = Field(None, description="카테고리")
 
     # STAR format fields
     situation: str | None = Field(None, min_length=1, max_length=5000, description="상황 (STAR의 S)")
