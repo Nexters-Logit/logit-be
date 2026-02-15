@@ -59,6 +59,7 @@ class Settings(BaseSettings):
 
     # CORS
     BACKEND_CORS_ORIGINS: Annotated[list[AnyUrl] | str, BeforeValidator(parse_cors)] = []
+    BACKEND_HOST: str = "http://localhost:8000"
     FRONTEND_HOST: str = "http://localhost:3000"
 
     @computed_field
@@ -103,17 +104,12 @@ class Settings(BaseSettings):
     # OAuth - Google
     GOOGLE_CLIENT_ID: str | None = None
     GOOGLE_CLIENT_SECRET: str | None = None
-    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
 
     # OAuth - Apple
     APPLE_CLIENT_ID: str | None = None
     APPLE_TEAM_ID: str | None = None
     APPLE_KEY_ID: str | None = None
     APPLE_PRIVATE_KEY: str | None = None
-    APPLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/apple/callback"
-
-    # OAuth - Frontend callback (환경별 오버라이드: FRONTEND_CALLBACK_URL=https://logit.ai.kr/auth/callback)
-    FRONTEND_CALLBACK_URL: str = "http://localhost:3000/auth/callback"
 
     # OpenAI (for Langchain)
     OPENAI_API_KEY: str | None = None

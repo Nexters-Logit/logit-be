@@ -9,6 +9,7 @@ from fastapi import APIRouter, Cookie, Form, Header, HTTPException, Response, st
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from src.auth import constants, schemas, service
+from src.auth.utils import get_frontend_callback_url, get_oauth_redirect_uri
 from src.auth.exceptions import OAuthError, OAuthProviderNotConfiguredError
 from src.common.responses import (
     ERROR_400_BAD_REQUEST,
@@ -92,7 +93,7 @@ async def _store_temp_code_and_redirect(result: dict) -> RedirectResponse:
 
     params = urlencode({"code": temp_code})
     return RedirectResponse(
-        url=f"{settings.FRONTEND_CALLBACK_URL}?{params}"
+        url=f"{get_frontend_callback_url()}?{params}"
     )
 
 
@@ -100,7 +101,7 @@ def _error_redirect(detail: str) -> RedirectResponse:
     """에러 메시지와 함께 프론트엔드로 리디렉션."""
     error_params = urlencode({"error": detail})
     return RedirectResponse(
-        url=f"{settings.FRONTEND_CALLBACK_URL}?{error_params}"
+        url=f"{get_frontend_callback_url()}?{error_params}"
     )
 
 
@@ -127,7 +128,7 @@ async def google_login():
 
     params = urlencode({
         "client_id": settings.GOOGLE_CLIENT_ID,
-        "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+        "redirect_uri": get_oauth_redirect_uri("google"),
         "response_type": "code",
         "scope": constants.GOOGLE_SCOPES,
         "state": state,
@@ -221,7 +222,7 @@ async def apple_login():
 
     params = urlencode({
         "client_id": settings.APPLE_CLIENT_ID,
-        "redirect_uri": settings.APPLE_REDIRECT_URI,
+        "redirect_uri": get_oauth_redirect_uri("apple"),
         "response_type": "code",
         "response_mode": "form_post",
         "scope": constants.APPLE_SCOPES,

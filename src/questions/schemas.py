@@ -72,6 +72,7 @@ class QuestionRead(BaseModel):
     question: str = Field(..., description="문항 내용")
     max_length: int | None = Field(None, description="글자수 제한")
     answer: str | None = Field(None, description="답변 내용")
+    is_completed: bool = Field(False, description="작성 완료 여부")
     created_at: datetime = Field(..., description="생성 시간")
     updated_at: datetime = Field(..., description="수정 시간")
 
@@ -85,6 +86,7 @@ class QuestionRead(BaseModel):
                 "question": "본인이 가장 열정적으로 참여한 프로젝트 경험을 설명해 주세요.",
                 "max_length": 1000,
                 "answer": "AI 챗봇 서비스를 개발하며 팀을 이끌었습니다...",
+                "is_completed": False,
                 "created_at": "2024-06-15T10:00:00Z",
                 "updated_at": "2024-06-15T10:00:00Z",
             }
@@ -99,6 +101,7 @@ class QuestionListItem(BaseModel):
     question: str = Field(..., description="문항 내용")
     max_length: int | None = Field(None, description="글자수 제한")
     answer: str | None = Field(None, description="답변 내용")
+    is_completed: bool = Field(False, description="작성 완료 여부")
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -108,6 +111,7 @@ class QuestionListItem(BaseModel):
                 "question": "본인이 가장 열정적으로 참여한 프로젝트 경험을 설명해 주세요.",
                 "max_length": 1000,
                 "answer": "",
+                "is_completed": False,
             }
         },
     )
