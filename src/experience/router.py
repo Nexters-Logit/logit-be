@@ -106,7 +106,7 @@ def list_experiences(
 async def search_experiences(
     current_user: ActiveUser,
     qdrant_client: QdrantDep,
-    q: str = Query(..., min_length=1, description="검색 쿼리"),
+    q: str = Query(..., min_length=1, max_length=1000, description="검색 쿼리"),
     limit: int = Query(10, ge=1, le=100, description="최대 결과 수"),
 ) -> ExperienceSearchResult:
     """
@@ -147,7 +147,7 @@ async def search_experiences(
     summary="경험 상세 조회",
 )
 def get_experience(
-    experience_id: str,
+    experience_id: UUID,
     current_user: ActiveUser,
     qdrant_client: QdrantDep,
 ) -> ExperienceRead:
@@ -161,7 +161,7 @@ def get_experience(
     """
     experience = service.get_experience(
         client=qdrant_client,
-        experience_id=experience_id,
+        experience_id=str(experience_id),
         user_id=str(current_user.id),
     )
 
@@ -181,7 +181,7 @@ def get_experience(
     summary="경험 수정",
 )
 async def update_experience(
-    experience_id: str,
+    experience_id: UUID,
     experience_update: ExperienceUpdate,
     current_user: ActiveUser,
     qdrant_client: QdrantDep,
@@ -203,7 +203,7 @@ async def update_experience(
     """
     experience = await service.update_experience(
         client=qdrant_client,
-        experience_id=experience_id,
+        experience_id=str(experience_id),
         user_id=str(current_user.id),
         experience_update=experience_update,
     )
@@ -224,7 +224,7 @@ async def update_experience(
     summary="경험 삭제",
 )
 def delete_experience(
-    experience_id: str,
+    experience_id: UUID,
     current_user: ActiveUser,
     qdrant_client: QdrantDep,
 ) -> None:
@@ -236,7 +236,7 @@ def delete_experience(
     """
     service.delete_experience(
         client=qdrant_client,
-        experience_id=experience_id,
+        experience_id=str(experience_id),
         user_id=str(current_user.id),
     )
 

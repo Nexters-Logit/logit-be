@@ -4,9 +4,10 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, APIError, APIConnectionError, RateLimitError, AuthenticationError
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue, PointStruct
+from qdrant_client.http.exceptions import UnexpectedResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -32,12 +33,41 @@ async def _generate_embedding(text: str) -> list[float]:
 
     Returns:
         1536-dimensional embedding vector
+
+    Raises:
+        HTTPException: If embedding generation fails
     """
-    response = await openai_client.embeddings.create(
-        model="text-embedding-3-small",
-        input=text,
-    )
-    return response.data[0].embedding
+    try:
+        response = await openai_client.embeddings.create(
+            model="text-embedding-3-small",
+            input=text,
+        )
+        return response.data[0].embedding
+    except AuthenticationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="OpenAI API authentication failed. Please check API key configuration.",
+        ) from e
+    except RateLimitError as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="OpenAI API rate limit exceeded. Please try again later.",
+        ) from e
+    except APIConnectionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Failed to connect to OpenAI API. Please try again later.",
+        ) from e
+    except APIError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"OpenAI API error: {str(e)}",
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error generating embedding: {str(e)}",
+        ) from e
 
 
 def _combine_text_for_embedding(experience: Experience) -> str:
@@ -165,7 +195,16 @@ async def _generate_tags(experience: Experience) -> str:
 
         return ", ".join(valid_tags)
 
-    except Exception as e:
+    except AuthenticationError:
+        # Fallback for authentication error
+        return "문제해결"
+    except RateLimitError:
+        # Fallback for rate limit
+        return "문제해결"
+    except (APIConnectionError, APIError):
+        # Fallback for API errors
+        return "문제해결"
+    except Exception:
         # Fallback: return default tag if AI fails
         return "문제해결"
 
@@ -380,7 +419,11 @@ async def create_experience(
     )
 
     # Generate tags using AI
-    tags = await _generate_tags(temp_experience)
+    try:
+        tags = await _generate_tags(temp_experience)
+    except Exception as e:
+        # Use fallback tag if tag generation fails
+        tags = "문제해결"
 
     # Create final Experience object with tags
     experience = Experience(
@@ -393,26 +436,31 @@ async def create_experience(
     )
 
     # Generate embedding
+    text = _combine_text_for_embedding(experience)
+    embedding = await _generate_embedding(text)
+
+    # Store in Qdrant
     try:
-        text = _combine_text_for_embedding(experience)
-        embedding = await _generate_embedding(text)
+        point = PointStruct(
+            id=experience.id,
+            vector=embedding,
+            payload=experience.model_dump(mode="json"),
+        )
+
+        client.upsert(
+            collection_name=settings.QDRANT_COLLECTION_NAME,
+            points=[point],
+        )
+    except UnexpectedResponse as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to store experience in vector database: {str(e)}",
+        ) from e
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate embedding: {str(e)}",
-        )
-
-    # Store in Qdrant
-    point = PointStruct(
-        id=experience.id,
-        vector=embedding,
-        payload=experience.model_dump(mode="json"),
-    )
-
-    client.upsert(
-        collection_name=settings.QDRANT_COLLECTION_NAME,
-        points=[point],
-    )
+            detail=f"Unexpected error storing experience: {str(e)}",
+        ) from e
 
     return experience
 
@@ -436,11 +484,22 @@ def get_experience(
     Raises:
         HTTPException: If not found or unauthorized
     """
-    # Retrieve from Qdrant
-    points = client.retrieve(
-        collection_name=settings.QDRANT_COLLECTION_NAME,
-        ids=[experience_id],
-    )
+    try:
+        # Retrieve from Qdrant
+        points = client.retrieve(
+            collection_name=settings.QDRANT_COLLECTION_NAME,
+            ids=[experience_id],
+        )
+    except UnexpectedResponse as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to retrieve experience from vector database: {str(e)}",
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error retrieving experience: {str(e)}",
+        ) from e
 
     if not points:
         raise HTTPException(
@@ -477,6 +536,9 @@ def list_experiences(
 
     Returns:
         Tuple of (list of experiences, total count)
+
+    Raises:
+        HTTPException: If retrieval fails
     """
     # Filter by user_id
     user_filter = Filter(
@@ -488,33 +550,44 @@ def list_experiences(
         ]
     )
 
-    # Scroll to get all matching points
-    scroll_result = client.scroll(
-        collection_name=settings.QDRANT_COLLECTION_NAME,
-        scroll_filter=user_filter,
-        limit=limit,
-        offset=offset,
-        with_payload=True,
-        with_vectors=False,
-    )
+    try:
+        # Scroll to get all matching points
+        scroll_result = client.scroll(
+            collection_name=settings.QDRANT_COLLECTION_NAME,
+            scroll_filter=user_filter,
+            limit=limit,
+            offset=offset,
+            with_payload=True,
+            with_vectors=False,
+        )
 
-    points, next_offset = scroll_result
+        points, next_offset = scroll_result
 
-    # Convert to Experience objects
-    experiences = [Experience(**point.payload) for point in points]
+        # Convert to Experience objects
+        experiences = [Experience(**point.payload) for point in points]
 
-    # Get total count (approximate, Qdrant doesn't have exact count with filter)
-    # We'll count by scrolling all
-    count_result = client.scroll(
-        collection_name=settings.QDRANT_COLLECTION_NAME,
-        scroll_filter=user_filter,
-        limit=10000,  # Large limit to get all
-        with_payload=False,
-        with_vectors=False,
-    )
-    total = len(count_result[0])
+        # Get total count (approximate, Qdrant doesn't have exact count with filter)
+        # We'll count by scrolling all
+        count_result = client.scroll(
+            collection_name=settings.QDRANT_COLLECTION_NAME,
+            scroll_filter=user_filter,
+            limit=10000,  # Large limit to get all
+            with_payload=False,
+            with_vectors=False,
+        )
+        total = len(count_result[0])
 
-    return experiences, total
+        return experiences, total
+    except UnexpectedResponse as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to list experiences from vector database: {str(e)}",
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error listing experiences: {str(e)}",
+        ) from e
 
 
 async def update_experience(
@@ -585,35 +658,55 @@ async def update_experience(
 
     if content_changed:
         # Regenerate tags using AI
-        updated_experience.tags = await _generate_tags(updated_experience)
+        try:
+            updated_experience.tags = await _generate_tags(updated_experience)
+        except Exception:
+            # Keep existing tags if regeneration fails
+            pass
 
         # Regenerate embedding
+        text = _combine_text_for_embedding(updated_experience)
+        embedding = await _generate_embedding(text)
+
+        # Update with new embedding
         try:
-            text = _combine_text_for_embedding(updated_experience)
-            embedding = await _generate_embedding(text)
+            point = PointStruct(
+                id=experience_id,
+                vector=embedding,
+                payload=updated_experience.model_dump(mode="json"),
+            )
+            client.upsert(
+                collection_name=settings.QDRANT_COLLECTION_NAME,
+                points=[point],
+            )
+        except UnexpectedResponse as e:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Failed to update experience in vector database: {str(e)}",
+            ) from e
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to generate embedding: {str(e)}",
-            )
-
-        # Update with new embedding
-        point = PointStruct(
-            id=experience_id,
-            vector=embedding,
-            payload=updated_experience.model_dump(mode="json"),
-        )
-        client.upsert(
-            collection_name=settings.QDRANT_COLLECTION_NAME,
-            points=[point],
-        )
+                detail=f"Unexpected error updating experience: {str(e)}",
+            ) from e
     else:
         # Update payload only
-        client.set_payload(
-            collection_name=settings.QDRANT_COLLECTION_NAME,
-            payload=updated_experience.model_dump(mode="json"),
-            points=[experience_id],
-        )
+        try:
+            client.set_payload(
+                collection_name=settings.QDRANT_COLLECTION_NAME,
+                payload=updated_experience.model_dump(mode="json"),
+                points=[experience_id],
+            )
+        except UnexpectedResponse as e:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Failed to update experience in vector database: {str(e)}",
+            ) from e
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Unexpected error updating experience: {str(e)}",
+            ) from e
 
     return updated_experience
 
@@ -638,10 +731,21 @@ def delete_experience(
     get_experience(client, experience_id, user_id)
 
     # Delete from Qdrant
-    client.delete(
-        collection_name=settings.QDRANT_COLLECTION_NAME,
-        points_selector=[experience_id],
-    )
+    try:
+        client.delete(
+            collection_name=settings.QDRANT_COLLECTION_NAME,
+            points_selector=[experience_id],
+        )
+    except UnexpectedResponse as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to delete experience from vector database: {str(e)}",
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error deleting experience: {str(e)}",
+        ) from e
 
 
 async def search_experiences(
@@ -666,13 +770,7 @@ async def search_experiences(
         HTTPException: If search fails
     """
     # Generate query embedding
-    try:
-        query_embedding = await _generate_embedding(query)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate query embedding: {str(e)}",
-        )
+    query_embedding = await _generate_embedding(query)
 
     # Filter by user_id
     user_filter = Filter(
@@ -685,13 +783,24 @@ async def search_experiences(
     )
 
     # Search
-    search_result = client.query_points(
-        collection_name=settings.QDRANT_COLLECTION_NAME,
-        query=query_embedding,
-        query_filter=user_filter,
-        limit=limit,
-        with_payload=True,
-    ).points
+    try:
+        search_result = client.query_points(
+            collection_name=settings.QDRANT_COLLECTION_NAME,
+            query=query_embedding,
+            query_filter=user_filter,
+            limit=limit,
+            with_payload=True,
+        ).points
+    except UnexpectedResponse as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to search experiences in vector database: {str(e)}",
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error searching experiences: {str(e)}",
+        ) from e
 
     # Convert to (Experience, score) tuples
     results = [
@@ -773,13 +882,7 @@ async def get_experiences_with_question_similarity(
     question_category = await _extract_category_from_question(question.question, project_info)
 
     # Generate query embedding
-    try:
-        query_embedding = await _generate_embedding(query_text)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate query embedding: {str(e)}",
-        )
+    query_embedding = await _generate_embedding(query_text)
 
     # Filter by user_id
     user_filter = Filter(
@@ -793,13 +896,24 @@ async def get_experiences_with_question_similarity(
 
     # Search all experiences with similarity scores
     # Set limit high to get all user experiences
-    search_result = client.query_points(
-        collection_name=settings.QDRANT_COLLECTION_NAME,
-        query=query_embedding,
-        query_filter=user_filter,
-        limit=10000,  # Large limit to get all experiences
-        with_payload=True,
-    ).points
+    try:
+        search_result = client.query_points(
+            collection_name=settings.QDRANT_COLLECTION_NAME,
+            query=query_embedding,
+            query_filter=user_filter,
+            limit=10000,  # Large limit to get all experiences
+            with_payload=True,
+        ).points
+    except UnexpectedResponse as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to search experiences in vector database: {str(e)}",
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error searching experiences: {str(e)}",
+        ) from e
 
     # Calculate final scores (base embedding score + tag bonus + category bonus)
     results_with_scores = []
