@@ -28,6 +28,25 @@ from src.questions.models import Question
 openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
 
+def _sanitize_for_logging(text: str, max_length: int = 50) -> str:
+    """
+    Sanitize text for safe logging by truncating and adding ellipsis.
+    Prevents PII leakage in logs.
+
+    Args:
+        text: Text to sanitize
+        max_length: Maximum length to keep (default: 50)
+
+    Returns:
+        Sanitized text safe for logging
+    """
+    if not text:
+        return "[empty]"
+    if len(text) <= max_length:
+        return text
+    return f"{text[:max_length]}..."
+
+
 async def _generate_embedding(text: str) -> list[float]:
     """
     Generate embedding vector using OpenAI text-embedding-3-small.
@@ -204,16 +223,39 @@ async def _generate_tags(experience: Experience) -> str:
 
         return ", ".join(valid_tags)
 
-    except AuthenticationError:
+    except AuthenticationError as e:
+        logger.error(
+            "OpenAI authentication failed while generating tags for experience (ID: %s, title: %s, format: %s): %s",
+            experience.id, experience.title, experience.format_type, e, exc_info=True
+        )
         # Fallback for authentication error
         return "문제해결"
-    except RateLimitError:
+    except RateLimitError as e:
+        logger.warning(
+            "OpenAI rate limit exceeded while generating tags for experience (ID: %s, title: %s, format: %s): %s",
+            experience.id, experience.title, experience.format_type, e
+        )
         # Fallback for rate limit
         return "문제해결"
-    except (APIConnectionError, APIError):
-        # Fallback for API errors
+    except APIConnectionError as e:
+        logger.error(
+            "Failed to connect to OpenAI while generating tags for experience (ID: %s, title: %s, format: %s): %s",
+            experience.id, experience.title, experience.format_type, e, exc_info=True
+        )
+        # Fallback for connection error
         return "문제해결"
-    except Exception:
+    except APIError as e:
+        logger.error(
+            "OpenAI API error while generating tags for experience (ID: %s, title: %s, format: %s): %s",
+            experience.id, experience.title, experience.format_type, e, exc_info=True
+        )
+        # Fallback for API error
+        return "문제해결"
+    except Exception as e:
+        logger.exception(
+            "Unexpected error generating tags for experience (ID: %s, title: %s, format: %s): %s",
+            experience.id, experience.title, experience.format_type, e
+        )
         # Fallback: return default tag if AI fails
         return "문제해결"
 
@@ -276,7 +318,11 @@ async def _extract_tags_from_question(question_text: str, project_info: str) -> 
 
         return valid_tags
 
-    except Exception:
+    except Exception as e:
+        logger.exception(
+            "Unexpected error extracting tags from question (question_preview: %s, project_preview: %s): %s",
+            _sanitize_for_logging(question_text), _sanitize_for_logging(project_info), e
+        )
         # Fallback: return empty list if AI fails
         return []
 
@@ -373,6 +419,10 @@ async def _extract_category_from_question(question_text: str, project_info: str)
         return None
 
     except Exception as e:
+        logger.exception(
+            "Unexpected error extracting category from question (question_preview: %s, project_preview: %s): %s",
+            _sanitize_for_logging(question_text), _sanitize_for_logging(project_info), e
+        )
         # Fallback: return None if AI fails
         return None
 
@@ -820,13 +870,19 @@ async def search_experiences(
             with_payload=True,
         ).points
     except UnexpectedResponse as e:
-        logger.error("Failed to search experiences in Qdrant (user: %s, query: %s): %s", user_id, query, e, exc_info=True)
+        logger.error(
+            "Failed to search experiences in Qdrant (user: %s, query_preview: %s): %s",
+            user_id, _sanitize_for_logging(query), e, exc_info=True
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Failed to search experiences in vector database. Please try again later.",
         ) from e
     except Exception as e:
-        logger.exception("Unexpected error searching experiences (user: %s, query: %s): %s", user_id, query, e)
+        logger.exception(
+            "Unexpected error searching experiences (user: %s, query_preview: %s): %s",
+            user_id, _sanitize_for_logging(query), e
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error while searching experiences.",
