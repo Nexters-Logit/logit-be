@@ -21,18 +21,18 @@ class ExperienceCreate(BaseModel):
     category: ExperienceCategory = Field(..., description="카테고리")
 
     # STAR format fields (required when format_type=STAR)
-    situation: str | None = Field(None, min_length=1, description="상황 (STAR의 S)")
-    task: str | None = Field(None, min_length=1, description="과제 (STAR의 T)")
-    action: str | None = Field(None, min_length=1, description="행동 (STAR의 A)")
-    result: str | None = Field(None, min_length=1, description="결과 (STAR의 R)")
+    situation: str | None = Field(None, min_length=1, max_length=5000, description="상황 (STAR의 S)")
+    task: str | None = Field(None, min_length=1, max_length=5000, description="과제 (STAR의 T)")
+    action: str | None = Field(None, min_length=1, max_length=5000, description="행동 (STAR의 A)")
+    result: str | None = Field(None, min_length=1, max_length=5000, description="결과 (STAR의 R)")
 
     # PSI format fields (required when format_type=PSI)
-    problem: str | None = Field(None, min_length=1, description="문제 (PSI의 P)")
-    solution: str | None = Field(None, min_length=1, description="해결책 (PSI의 S)")
-    insight: str | None = Field(None, min_length=1, description="인사이트 (PSI의 I)")
+    problem: str | None = Field(None, min_length=1, max_length=5000, description="문제 (PSI의 P)")
+    solution: str | None = Field(None, min_length=1, max_length=5000, description="해결책 (PSI의 S)")
+    insight: str | None = Field(None, min_length=1, max_length=5000, description="인사이트 (PSI의 I)")
 
     # Free format field (required when format_type=FREE)
-    content: str | None = Field(None, min_length=1, description="자유 형식 내용")
+    content: str | None = Field(None, min_length=1, max_length=10000, description="자유 형식 내용")
 
     @field_validator("end_date", mode="before")
     @classmethod
@@ -49,6 +49,11 @@ class ExperienceCreate(BaseModel):
       
     @model_validator(mode="after")
     def validate_format_fields(self):
+        # Validate date range
+        if self.end_date and self.start_date > self.end_date:
+            raise ValueError("start_date must be before or equal to end_date")
+
+        # Validate format-specific fields
         if self.format_type == ExperienceFormatType.STAR:
             if not all([self.situation, self.task, self.action, self.result]):
                 raise ValueError("STAR format requires: situation, task, action, result")
@@ -100,18 +105,18 @@ class ExperienceUpdate(BaseModel):
     category: ExperienceCategory | None = Field(None, description="카테고리")
 
     # STAR format fields
-    situation: str | None = Field(None, min_length=1, description="상황 (STAR의 S)")
-    task: str | None = Field(None, min_length=1, description="과제 (STAR의 T)")
-    action: str | None = Field(None, min_length=1, description="행동 (STAR의 A)")
-    result: str | None = Field(None, min_length=1, description="결과 (STAR의 R)")
+    situation: str | None = Field(None, min_length=1, max_length=5000, description="상황 (STAR의 S)")
+    task: str | None = Field(None, min_length=1, max_length=5000, description="과제 (STAR의 T)")
+    action: str | None = Field(None, min_length=1, max_length=5000, description="행동 (STAR의 A)")
+    result: str | None = Field(None, min_length=1, max_length=5000, description="결과 (STAR의 R)")
 
     # PSI format fields
-    problem: str | None = Field(None, min_length=1, description="문제 (PSI의 P)")
-    solution: str | None = Field(None, min_length=1, description="해결책 (PSI의 S)")
-    insight: str | None = Field(None, min_length=1, description="인사이트 (PSI의 I)")
+    problem: str | None = Field(None, min_length=1, max_length=5000, description="문제 (PSI의 P)")
+    solution: str | None = Field(None, min_length=1, max_length=5000, description="해결책 (PSI의 S)")
+    insight: str | None = Field(None, min_length=1, max_length=5000, description="인사이트 (PSI의 I)")
 
     # Free format field
-    content: str | None = Field(None, min_length=1, description="자유 형식 내용")
+    content: str | None = Field(None, min_length=1, max_length=10000, description="자유 형식 내용")
 
     @field_validator("end_date", mode="before")
     @classmethod
@@ -125,6 +130,13 @@ class ExperienceUpdate(BaseModel):
                 raise ValueError("날짜 형식은 YYYY-MM-DD이어야 합니다.")
             return v.strip()
         return v
+
+    @model_validator(mode="after")
+    def validate_date_range(self):
+        # Only validate if both dates are provided
+        if self.start_date and self.end_date and self.start_date > self.end_date:
+            raise ValueError("start_date must be before or equal to end_date")
+        return self
 
     model_config = ConfigDict(
         json_schema_extra={
