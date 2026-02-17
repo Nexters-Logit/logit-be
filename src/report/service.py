@@ -4,6 +4,7 @@ import logging
 from collections import Counter
 
 from fastapi import HTTPException, status
+from pydantic import ValidationError
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 from qdrant_client.http.exceptions import UnexpectedResponse
@@ -200,5 +201,30 @@ def _get_all_user_experiences(
         ) from e
     else:
         # Convert to Experience objects
-        experiences = [Experience(**point.payload) for point in all_points]
-        return experiences
+        try:
+            experiences = [Experience(**point.payload) for point in all_points]
+            return experiences
+        except ValidationError as e:
+            logger.error(
+                "Failed to validate experience payload from Qdrant (user: %s): %s. "
+                "Point count: %d. First invalid payload: %s",
+                user_id,
+                e,
+                len(all_points),
+                all_points[0].payload if all_points else None,
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Invalid experience data format in database.",
+            ) from e
+        except Exception as e:
+            logger.exception(
+                "Unexpected error converting experience payloads (user: %s). Point count: %d",
+                user_id,
+                len(all_points),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error while processing experiences.",
+            ) from e

@@ -351,9 +351,34 @@ def test_get_experience_tag_count_api(client: TestClient, auth_headers: dict, ov
     assert "커뮤니케이션" in tags_in_response
 
 
+def test_get_experience_with_invalid_payload(mock_qdrant_client, test_user: User):
+    """Test that ValidationError is properly handled when payload is malformed."""
+    # Mock a malformed payload that will fail Experience validation
+    mock_point = MagicMock()
+    mock_point.payload = {
+        "id": str(uuid4()),
+        "user_id": str(test_user.id),
+        "title": "Test",
+        # Missing required fields like experience_type, format_type, category, etc.
+    }
+    mock_qdrant_client.scroll.return_value = ([mock_point], None)
+
+    # Should raise HTTPException with 500 status
+    with pytest.raises(Exception) as exc_info:
+        service.get_experience_type_counts(
+            client=mock_qdrant_client,
+            user_id=str(test_user.id),
+        )
+
+    # Verify it's an HTTPException with appropriate status
+    assert hasattr(exc_info.value, 'status_code')
+    assert exc_info.value.status_code == 500
+
+
 def test_report_apis_require_authentication(client: TestClient):
     """Test that all report endpoints require authentication."""
     endpoints = [
+        "/api/v1/report/experience-summary",
         "/api/v1/report/experience-type-count",
         "/api/v1/report/experience-category-count",
         "/api/v1/report/experience-tag-count",
