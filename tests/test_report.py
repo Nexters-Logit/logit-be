@@ -46,6 +46,34 @@ def auth_headers(test_user: User) -> dict[str, str]:
 
 
 @pytest.fixture
+def override_report_deps(mock_qdrant_client, test_user: User, sample_experiences):
+    """Override report dependencies for testing."""
+    from src.main import app
+    from src.users.dependencies import get_current_user
+    from src.database import get_qdrant_client
+
+    # Mock Qdrant dependency
+    mock_points = [MagicMock(payload=exp.model_dump()) for exp in sample_experiences]
+    mock_qdrant_client.scroll.return_value = (mock_points, None)
+
+    # Override dependencies
+    async def override_get_current_user():
+        return test_user
+
+    def override_get_qdrant_client():
+        return mock_qdrant_client
+
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[get_qdrant_client] = override_get_qdrant_client
+
+    yield
+
+    # Cleanup - remove only the specific overrides we added
+    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(get_qdrant_client, None)
+
+
+@pytest.fixture
 def sample_experiences(test_user: User) -> list[Experience]:
     """Create sample experiences for testing."""
     return [
@@ -260,32 +288,10 @@ def test_get_experience_tag_counts_with_empty_tags(mock_qdrant_client, test_user
 
 
 # Router/API Tests
-def test_get_experience_type_count_api(client: TestClient, auth_headers: dict, mock_qdrant_client, test_user: User, sample_experiences):
+def test_get_experience_type_count_api(client: TestClient, auth_headers: dict, override_report_deps):
     """Test GET /api/v1/report/experience-type-count endpoint."""
-    from src.main import app
-    from src.users.dependencies import get_current_user
-    from src.database import get_qdrant_client
-
-    # Mock Qdrant dependency
-    mock_points = [MagicMock(payload=exp.model_dump()) for exp in sample_experiences]
-    mock_qdrant_client.scroll.return_value = (mock_points, None)
-
-    # Override dependencies
-    async def override_get_current_user():
-        return test_user
-
-    def override_get_qdrant_client():
-        return mock_qdrant_client
-
-    app.dependency_overrides[get_current_user] = override_get_current_user
-    app.dependency_overrides[get_qdrant_client] = override_get_qdrant_client
-
-    try:
-        # Make request
-        response = client.get("/api/v1/report/experience-type-count", headers=auth_headers)
-    finally:
-        # Cleanup
-        app.dependency_overrides.clear()
+    # Make request
+    response = client.get("/api/v1/report/experience-type-count", headers=auth_headers)
 
     # Assertions
     assert response.status_code == 200
@@ -302,32 +308,10 @@ def test_get_experience_type_count_api(client: TestClient, auth_headers: dict, m
     assert ExperienceType.INTERN.value in types_in_response
 
 
-def test_get_experience_category_count_api(client: TestClient, auth_headers: dict, mock_qdrant_client, test_user: User, sample_experiences):
+def test_get_experience_category_count_api(client: TestClient, auth_headers: dict, override_report_deps):
     """Test GET /api/v1/report/experience-category-count endpoint."""
-    from src.main import app
-    from src.users.dependencies import get_current_user
-    from src.database import get_qdrant_client
-
-    # Mock Qdrant dependency
-    mock_points = [MagicMock(payload=exp.model_dump()) for exp in sample_experiences]
-    mock_qdrant_client.scroll.return_value = (mock_points, None)
-
-    # Override dependencies
-    async def override_get_current_user():
-        return test_user
-
-    def override_get_qdrant_client():
-        return mock_qdrant_client
-
-    app.dependency_overrides[get_current_user] = override_get_current_user
-    app.dependency_overrides[get_qdrant_client] = override_get_qdrant_client
-
-    try:
-        # Make request
-        response = client.get("/api/v1/report/experience-category-count", headers=auth_headers)
-    finally:
-        # Cleanup
-        app.dependency_overrides.clear()
+    # Make request
+    response = client.get("/api/v1/report/experience-category-count", headers=auth_headers)
 
     # Assertions
     assert response.status_code == 200
@@ -343,32 +327,10 @@ def test_get_experience_category_count_api(client: TestClient, auth_headers: dic
     assert ExperienceCategory.COLLABORATIVE_COMMUNICATION.value in categories_in_response
 
 
-def test_get_experience_tag_count_api(client: TestClient, auth_headers: dict, mock_qdrant_client, test_user: User, sample_experiences):
+def test_get_experience_tag_count_api(client: TestClient, auth_headers: dict, override_report_deps):
     """Test GET /api/v1/report/experience-tag-count endpoint."""
-    from src.main import app
-    from src.users.dependencies import get_current_user
-    from src.database import get_qdrant_client
-
-    # Mock Qdrant dependency
-    mock_points = [MagicMock(payload=exp.model_dump()) for exp in sample_experiences]
-    mock_qdrant_client.scroll.return_value = (mock_points, None)
-
-    # Override dependencies
-    async def override_get_current_user():
-        return test_user
-
-    def override_get_qdrant_client():
-        return mock_qdrant_client
-
-    app.dependency_overrides[get_current_user] = override_get_current_user
-    app.dependency_overrides[get_qdrant_client] = override_get_qdrant_client
-
-    try:
-        # Make request
-        response = client.get("/api/v1/report/experience-tag-count", headers=auth_headers)
-    finally:
-        # Cleanup
-        app.dependency_overrides.clear()
+    # Make request
+    response = client.get("/api/v1/report/experience-tag-count", headers=auth_headers)
 
     # Assertions
     assert response.status_code == 200
@@ -425,8 +387,9 @@ def test_get_experience_type_count_with_no_experiences(client: TestClient, auth_
         # Make request
         response = client.get("/api/v1/report/experience-type-count", headers=auth_headers)
     finally:
-        # Cleanup
-        app.dependency_overrides.clear()
+        # Cleanup - remove only the specific overrides we added
+        app.dependency_overrides.pop(get_current_user, None)
+        app.dependency_overrides.pop(get_qdrant_client, None)
 
     # Assertions
     assert response.status_code == 200
