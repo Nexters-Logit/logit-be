@@ -4,6 +4,7 @@ import os
 import pytest
 from collections.abc import Generator
 from fastapi.testclient import TestClient
+from sqlalchemy import JSON
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
@@ -31,7 +32,17 @@ def session_fixture() -> Generator[Session, None, None]:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    SQLModel.metadata.create_all(engine)
+
+    # Create only tables that don't have ARRAY columns (SQLite compatibility)
+    # Skip chats table to avoid ARRAY type issues
+    tables_to_create = [
+        table for table in SQLModel.metadata.sorted_tables
+        if table.name != "chats"
+    ]
+
+    for table in tables_to_create:
+        table.create(engine, checkfirst=True)
+
     with Session(engine) as session:
         yield session
 
