@@ -118,41 +118,6 @@ GET /projects/chats/{question_id}?cursor=1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed&si
     },
 }
 
-UPDATE_ANSWER_SWAGGER = {
-    "summary": "자기소개서 답변 업데이트",
-    "description": """
-AI가 생성한 초안(is_draft=true)을 자기소개서 답변으로 저장합니다.
-
-**프로세스:**
-1. 해당 chat_id의 AI 메시지 조회
-2. 해당 메시지의 content를 Question의 answer에 저장
-
-**사용 시점:**
-- 채팅 화면에서 AI 초안의 "자기소개서 업데이트" 버튼 클릭 시
-""",
-    "responses": {
-        status.HTTP_200_OK: {
-            "description": "답변 업데이트 성공",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "question_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-                        "answer": "Cardify 프로젝트에서..."
-                    }
-                }
-            },
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "채팅 메시지를 찾을 수 없음",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "Chat not found"}
-                }
-            },
-        },
-    },
-}
-
 SEND_CHAT_SWAGGER = {
     "summary": "메시지 전송 (SSE 스트리밍)",
     "description": """
