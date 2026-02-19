@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from .models import Chat, ChatRole
-from .schemas import ChatHistoryResponse, ChatHistoryItem, UpdateAnswerResponse
-from .llm_service import generate_ai_response_stream, classify_draft_response
+from .schemas import ChatHistoryResponse, ChatHistoryItem
+from .llm_service import generate_ai_response_stream
 from .rate_limit import ChatRateLimiter
 from src.questions.models import Question
 from src.projects.models import Project
@@ -126,17 +126,16 @@ async def send_chat_stream(
     ):
         chunk_data = json.loads(chunk_json)
 
-        if chunk_data["type"] == "content":
+        if chunk_data["type"] == "progress":
+            yield f"data: {chunk_json}\n\n"
+
+        elif chunk_data["type"] == "content":
             full_content += chunk_data["content"]
             yield f"data: {chunk_json}\n\n"
 
         elif chunk_data["type"] == "done":
-            # 5. AI 응답 내용 기반 초안 여부 판단
-            try:
-                is_draft = await classify_draft_response(full_content)
-            except Exception as e:
-                logger.warning(f"Draft classification failed: {e}")
-                is_draft = False  # 판단 실패 시 기본값
+            # 5. is_draft는 llm_service 파이프라인 분기에서 결정됨
+            is_draft = chunk_data.get("is_draft", False)
 
             # 6. AI 메시지 저장
             ai_chat = await create_assistant_chat(
@@ -279,38 +278,4 @@ async def get_chat_history_response(
         next_cursor=next_cursor,
         has_more=has_more,
         remaining_chats=remaining_chats,
-    )
-
-
-async def update_question_answer(
-    db: AsyncSession,
-    chat_id: UUID,
-    user_id: UUID
-) -> UpdateAnswerResponse | None:
-    """AI 답변으로 자기소개서 답변 업데이트"""
-
-    # 1. Chat 조회
-    chat_stmt = select(Chat).where(Chat.id == chat_id)
-    chat_result = await db.execute(chat_stmt)
-    chat = chat_result.scalar_one_or_none()
-
-    if not chat or chat.role != ChatRole.assistant or not chat.is_draft:
-        return None
-
-    # 2. 소유자 검증
-    if chat.user_id != user_id:
-        return None
-
-    # 3. Question 조회 및 answer 업데이트
-    question = await get_question_by_id(db, chat.question_id)
-    if not question:
-        return None
-
-    question.answer = chat.content
-    await db.commit()
-    await db.refresh(question)
-
-    return UpdateAnswerResponse(
-        question_id=question.id,
-        answer=question.answer
     )
