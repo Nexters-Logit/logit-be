@@ -9,7 +9,7 @@ from sqlmodel import select
 
 from .models import Chat, ChatRole
 from .schemas import ChatHistoryResponse, ChatHistoryItem
-from .llm_service import generate_ai_response_stream, classify_draft_response
+from .llm_service import generate_ai_response_stream
 from .rate_limit import ChatRateLimiter
 from src.questions.models import Question
 from src.projects.models import Project
@@ -126,17 +126,16 @@ async def send_chat_stream(
     ):
         chunk_data = json.loads(chunk_json)
 
-        if chunk_data["type"] == "content":
+        if chunk_data["type"] == "progress":
+            yield f"data: {chunk_json}\n\n"
+
+        elif chunk_data["type"] == "content":
             full_content += chunk_data["content"]
             yield f"data: {chunk_json}\n\n"
 
         elif chunk_data["type"] == "done":
-            # 5. AI 응답 내용 기반 초안 여부 판단
-            try:
-                is_draft = await classify_draft_response(full_content)
-            except Exception as e:
-                logger.warning(f"Draft classification failed: {e}")
-                is_draft = False  # 판단 실패 시 기본값
+            # 5. is_draft는 llm_service 파이프라인 분기에서 결정됨
+            is_draft = chunk_data.get("is_draft", False)
 
             # 6. AI 메시지 저장
             ai_chat = await create_assistant_chat(

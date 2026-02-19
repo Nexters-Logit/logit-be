@@ -117,7 +117,7 @@ class Settings(BaseSettings):
     OPENAI_TEMPERATURE: float = 0.7
 
     # Chat Rate Limit
-    CHAT_DAILY_LIMIT: int = 50  # 일일 채팅 제한 횟수
+    CHAT_DAILY_LIMIT: int = 10  # 일일 채팅 제한 횟수
 
     # Test User IDs (채팅 제한 면제)
     TEST_USER_IDS: list[str] = []
