@@ -31,7 +31,16 @@ def session_fixture() -> Generator[Session, None, None]:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    SQLModel.metadata.create_all(engine)
+
+    # Create only tables that don't have ARRAY columns (SQLite compatibility)
+    # Skip chats table to avoid ARRAY type issues
+    tables_to_create = [
+        table for table in SQLModel.metadata.sorted_tables
+        if table.name != "chats"
+    ]
+
+    SQLModel.metadata.create_all(engine, tables=tables_to_create, checkfirst=True)
+
     with Session(engine) as session:
         yield session
 

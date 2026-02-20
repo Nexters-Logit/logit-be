@@ -68,8 +68,11 @@ class ProjectListItem(BaseModel):
     id: UUID = Field(..., description="프로젝트 ID")
     company: str = Field(..., description="기업명")
     job_position: str = Field(..., description="직무")
+    due_date: date | None = Field(None, description="마감일")
     updated_at: datetime = Field(..., description="최근 활동일")
     question_id: UUID | None = Field(None, description="첫 번째 문항 ID")
+    total_questions: int = Field(0, description="전체 문항 수")
+    completed_questions: int = Field(0, description="완료 문항 수")
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -78,8 +81,11 @@ class ProjectListItem(BaseModel):
                 "id": "123e4567-e89b-12d3-a456-426614174000",
                 "company": "카카오",
                 "job_position": "백엔드 개발자",
+                "due_date": "2024-12-31",
                 "updated_at": "2024-06-15T10:00:00Z",
                 "question_id": "123e4567-e89b-12d3-a456-426614174000",
+                "total_questions": 3,
+                "completed_questions": 1,
             }
         },
     )
@@ -163,15 +169,21 @@ class ProjectListResponse(BaseModel):
                         "id": "123e4567-e89b-12d3-a456-426614174000",
                         "company": "카카오",
                         "job_position": "백엔드 개발자",
+                        "due_date": "2024-12-31",
                         "updated_at": "2024-06-15T10:00:00Z",
                         "question_id": "123e4567-e89b-12d3-a456-426614174000",
+                        "total_questions": 3,
+                        "completed_questions": 1,
                     },
                     {
                         "id": "223e4567-e89b-12d3-a456-426614174001",
                         "company": "네이버",
                         "job_position": "프론트엔드 개발자",
+                        "due_date": None,
                         "updated_at": "2024-06-14T09:00:00Z",
                         "question_id": "123e4567-e89b-12d3-a456-426614174000",
+                        "total_questions": 2,
+                        "completed_questions": 0,
                     },
                 ],
                 "total": 2,

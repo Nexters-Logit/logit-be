@@ -10,6 +10,7 @@ from logging.config import fileConfig
 from contextlib import asynccontextmanager
 import time
 
+import sentry_sdk
 from fastapi import Depends, FastAPI, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
@@ -24,10 +25,21 @@ from src.projects import router as projects_router
 from src.questions import router as questions_router
 from src.users import router as users_router
 from src.chats import router as chats_router
+from src.report import router as report_router
+from src.common.slack import send_error_notification
 
 # Load logging configuration
 fileConfig('logging.ini', disable_existing_loggers=False)
 logger = logging.getLogger(__name__)
+
+# Initialize Sentry
+if settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.ENVIRONMENT,
+        traces_sample_rate=1.0 if settings.ENVIRONMENT == "dev" else 0.1,
+        send_default_pii=False,
+    )
 
 # HTTP Basic Auth for docs
 security = HTTPBasic()
@@ -112,6 +124,7 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
+
 @app.middleware("http")
 async def logging_middleware(request: Request, call_next):
     """로그 미들웨어"""
@@ -130,6 +143,7 @@ async def logging_middleware(request: Request, call_next):
             f'"{request.method} {request.url.path}" 500 {process_time:.2f}ms - Error: {e}',
             exc_info=True
         )
+        send_error_notification(request, e)
         raise
 
 if docs_auth_required:
@@ -192,6 +206,11 @@ app.include_router(
     chats_router.router,
     prefix=f"{settings.API_V1_STR}",
     tags=["Chats"],
+)
+app.include_router(
+    report_router.router,
+    prefix=f"{settings.API_V1_STR}/report",
+    tags=["Report"],
 )
 
 @app.get("/")

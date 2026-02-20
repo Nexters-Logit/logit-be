@@ -59,6 +59,7 @@ class Settings(BaseSettings):
 
     # CORS
     BACKEND_CORS_ORIGINS: Annotated[list[AnyUrl] | str, BeforeValidator(parse_cors)] = []
+    BACKEND_HOST: str = "http://localhost:8000"
     FRONTEND_HOST: str = "http://localhost:3000"
 
     @computed_field
@@ -103,14 +104,12 @@ class Settings(BaseSettings):
     # OAuth - Google
     GOOGLE_CLIENT_ID: str | None = None
     GOOGLE_CLIENT_SECRET: str | None = None
-    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
 
     # OAuth - Apple
     APPLE_CLIENT_ID: str | None = None
     APPLE_TEAM_ID: str | None = None
     APPLE_KEY_ID: str | None = None
     APPLE_PRIVATE_KEY: str | None = None
-    APPLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/apple/callback"
 
     # OpenAI (for Langchain)
     OPENAI_API_KEY: str | None = None
@@ -122,6 +121,12 @@ class Settings(BaseSettings):
 
     # Test User IDs (채팅 제한 면제)
     TEST_USER_IDS: list[str] = []
+
+    # Sentry
+    SENTRY_DSN: str | None = None
+
+    # Slack Error Notification
+    SLACK_WEBHOOK_URL: str | None = None
 
     @model_validator(mode="after")
     def _enforce_non_default_secrets(self) -> Self:

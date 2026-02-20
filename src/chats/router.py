@@ -3,9 +3,9 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
-from .schemas import ChatRequest, ChatHistoryResponse, UpdateAnswerResponse
-from .service import send_chat_stream, get_chat_history_response, update_question_answer
-from .swagger import SEND_CHAT_SWAGGER, GET_CHAT_HISTORY_SWAGGER, UPDATE_ANSWER_SWAGGER
+from .schemas import ChatRequest, ChatHistoryResponse
+from .service import send_chat_stream, get_chat_history_response
+from .swagger import SEND_CHAT_SWAGGER, GET_CHAT_HISTORY_SWAGGER
 from .dependencies import RateLimiterDep
 from src.users.dependencies import ActiveUser, SessionDep
 from src.experience.dependencies import QdrantDep
@@ -97,25 +97,5 @@ async def get_chat_messages(
 
     if not response:
         raise HTTPException(404, "Question not found")
-
-    return response
-
-
-@router.patch(
-    "/projects/chats/{chat_id}/answer",
-    response_model=UpdateAnswerResponse,
-    **UPDATE_ANSWER_SWAGGER,
-)
-async def update_answer(
-    chat_id: UUID,
-    session: SessionDep,
-    current_user: ActiveUser
-):
-    """자기소개서 답변 업데이트 API"""
-
-    response = await update_question_answer(session, chat_id, current_user.id)
-
-    if not response:
-        raise HTTPException(404, "Chat not found")
 
     return response

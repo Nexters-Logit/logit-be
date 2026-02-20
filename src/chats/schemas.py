@@ -137,21 +137,3 @@ class ChatHistoryResponse(BaseModel):
             ]
         }
     }
-
-
-class UpdateAnswerResponse(BaseModel):
-    """자기소개서 답변 업데이트 응답"""
-
-    question_id: UUID
-    answer: str
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "question_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-                    "answer": "Cardify 프로젝트에서..."
-                }
-            ]
-        }
-    } 

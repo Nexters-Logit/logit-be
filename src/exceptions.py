@@ -1,17 +1,16 @@
 """
-Global exceptions for the application.
+Global shared exceptions.
 
-Domain-specific exceptions should be in each domain's exceptions.py.
-For example:
-- app/auth/exceptions.py - Auth domain exceptions
-- app/users/exceptions.py - Users domain exceptions
+도메인 공통으로 사용되는 예외 클래스.
+도메인 전용 예외는 각 도메인의 exceptions.py에 정의합니다.
+(예: src/auth/exceptions.py)
 """
 
 from fastapi import HTTPException, status
 
 
 class AuthenticationError(HTTPException):
-    """Authentication failed exception."""
+    """JWT 인증 실패 (토큰 무효/만료/미제공)."""
 
     def __init__(self, detail: str = "Authentication failed"):
         super().__init__(
@@ -22,7 +21,7 @@ class AuthenticationError(HTTPException):
 
 
 class UserNotFoundError(HTTPException):
-    """User not found exception."""
+    """사용자를 찾을 수 없음."""
 
     def __init__(self, detail: str = "User not found"):
         super().__init__(
@@ -31,30 +30,10 @@ class UserNotFoundError(HTTPException):
         )
 
 
-class InvalidCredentialsError(HTTPException):
-    """Invalid credentials exception."""
-
-    def __init__(self, detail: str = "Invalid credentials"):
-        super().__init__(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=detail,
-        )
-
-
 class InactiveUserError(HTTPException):
-    """Inactive user exception."""
+    """비활성 사용자."""
 
-    def __init__(self, detail: str = "User is inactive"):
-        super().__init__(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=detail,
-        )
-
-
-class OAuthError(HTTPException):
-    """OAuth authentication error."""
-
-    def __init__(self, detail: str = "OAuth authentication failed"):
+    def __init__(self, detail: str = "Inactive user"):
         super().__init__(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=detail,

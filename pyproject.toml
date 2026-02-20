@@ -33,6 +33,10 @@ dependencies = [
 
     # Security (JWT for OAuth authentication)
     "pyjwt>=2.8.0",
+    "cryptography>=42.0.0",
+
+    # Monitoring
+    "sentry-sdk[fastapi]>=2.0.0",
 
     # Utilities
     "python-dotenv>=1.0.1",

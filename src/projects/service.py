@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -63,13 +64,35 @@ async def get_projects(
         .scalar_subquery()
     )
 
+    # 전체 문항 수 서브쿼리
+    total_questions_subquery = (
+        select(func.count())
+        .where(Question.project_id == Project.id)
+        .where(Question.deleted_at.is_(None))
+        .correlate(Project)
+        .scalar_subquery()
+    )
+
+    # 완료 문항 수 서브쿼리
+    completed_questions_subquery = (
+        select(func.count())
+        .where(Question.project_id == Project.id)
+        .where(Question.deleted_at.is_(None))
+        .where(Question.is_completed == True)  # noqa: E712
+        .correlate(Project)
+        .scalar_subquery()
+    )
+
     statement = (
         select(
             Project.id,
             Project.company,
             Project.job_position,
+            Project.due_date,
             Project.updated_at,
             first_question_subquery.label("question_id"),
+            total_questions_subquery.label("total_questions"),
+            completed_questions_subquery.label("completed_questions"),
         )
         .where(Project.user_id == user_id)
         .where(Project.deleted_at.is_(None))
@@ -86,8 +109,11 @@ async def get_projects(
             "id": row.id,
             "company": row.company,
             "job_position": row.job_position,
+            "due_date": row.due_date,
             "updated_at": row.updated_at,
             "question_id": row.question_id,
+            "total_questions": row.total_questions,
+            "completed_questions": row.completed_questions,
         }
         for row in rows
     ]

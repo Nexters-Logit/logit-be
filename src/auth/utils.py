@@ -1,22 +1,13 @@
-"""Auth utility functions."""
+"""Authentication utility functions."""
 
-from datetime import UTC, datetime
-
-
-def get_oauth_state() -> str:
-    """Generate random state for OAuth flow."""
-    import secrets
-
-    return secrets.token_urlsafe(32)
+from src.config import settings
 
 
-def format_oauth_error(error: str, description: str | None = None) -> str:
-    """Format OAuth error message."""
-    if description:
-        return f"{error}: {description}"
-    return error
+def get_oauth_redirect_uri(provider: str) -> str:
+    """BACKEND_HOST 기반 OAuth provider 콜백 URL 생성."""
+    return f"{settings.BACKEND_HOST.rstrip('/')}{settings.API_V1_STR}/auth/{provider}/callback"
 
 
-def is_token_expired(exp: int) -> bool:
-    """Check if token is expired."""
-    return datetime.now(UTC).timestamp() > exp
+def get_frontend_callback_url() -> str:
+    """FRONTEND_HOST 기반 프론트엔드 콜백 URL 생성."""
+    return f"{settings.FRONTEND_HOST.rstrip('/')}/auth/callback"
