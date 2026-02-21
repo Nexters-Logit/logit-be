@@ -481,13 +481,9 @@ async def generate_ai_response_stream(
     # 파이프라인을 백그라운드 태스크로 시작
     asyncio.create_task(_run())
 
-    # queue에서 결과를 받으며 5초마다 ping 전송 (Android 연결 유지)
-    HEARTBEAT_INTERVAL = 5.0
+    # queue에서 결과를 받아 스트리밍
     while True:
-        try:
-            item = await asyncio.wait_for(queue.get(), timeout=HEARTBEAT_INTERVAL)
-            if item is None:
-                break
-            yield item
-        except asyncio.TimeoutError:
-            yield json.dumps({"type": "ping"}, ensure_ascii=False)
+        item = await queue.get()
+        if item is None:
+            break
+        yield item
