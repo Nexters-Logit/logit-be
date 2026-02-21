@@ -422,7 +422,6 @@ async def generate_ai_response_stream(
         # === 자기소개서 초안 생성: 멀티 스텝 파이프라인 ===
 
         # 2단계: 스토리라인 설계
-        yield json.dumps({"type": "progress", "step": "storyline", "message": "스토리라인 설계 중..."}, ensure_ascii=False)
         storyline = await design_storyline(
             question=question_content,
             max_length=max_length,
@@ -432,7 +431,6 @@ async def generate_ai_response_stream(
         )
 
         # 3단계: 초안 생성
-        yield json.dumps({"type": "progress", "step": "generation", "message": "초안 작성 중..."}, ensure_ascii=False)
         draft = await generate_draft_text(
             storyline=storyline,
             question_type=classification.question_type,
@@ -444,12 +442,10 @@ async def generate_ai_response_stream(
         )
 
         # 4단계: 검수
-        yield json.dumps({"type": "progress", "step": "review", "message": "검수 중..."}, ensure_ascii=False)
         review = await review_draft(draft, experiences, provider)
 
         # 4-1단계: 수정 (나열식/할루시네이션 문제 시)
         if review.has_listing_pattern or review.has_hallucination:
-            yield json.dumps({"type": "progress", "step": "revision", "message": "수정 중..."}, ensure_ascii=False)
             draft = await revise_draft_text(
                 draft=draft,
                 feedback=review.feedback,
