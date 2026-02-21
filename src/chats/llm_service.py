@@ -461,11 +461,11 @@ async def generate_ai_response_stream(
                 if max_length:
                     draft = await adjust_length_if_needed(draft, max_length, provider)
 
-                # 청크 단위 스트리밍 (15자씩, 50ms 간격)
-                chunk_size = 15
+                # 청크 단위 스트리밍 (5자씩, 100ms 간격)
+                chunk_size = 5
                 for i in range(0, len(draft), chunk_size):
                     await queue.put(json.dumps({"type": "content", "content": draft[i:i + chunk_size]}, ensure_ascii=False))
-                    await asyncio.sleep(0.05)
+                    await asyncio.sleep(0.1)
 
                 await queue.put(json.dumps(
                     {"type": "done", "content": draft, "is_draft": True},
