@@ -61,6 +61,7 @@ async def send_chat(
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
+            
         }
     )
 
