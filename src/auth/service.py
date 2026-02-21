@@ -306,7 +306,7 @@ async def _verify_apple_id_token(
     signing_key = await _find_jwks_key(kid, _get_apple_jwks, "Apple")
     audience = settings.APPLE_CLIENT_ID
     if platform == "app":
-        audience = audience[:3]
+        audience = audience[:-3]
 
     try:
         decoded = jwt.decode(
