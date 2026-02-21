@@ -45,7 +45,7 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
         value=refresh_token,
         httponly=True,
         secure=True,
-        samesite="none",
+        samesite="lax",
         domain=".logit.ai.kr",
         path="/",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
@@ -58,7 +58,7 @@ def _delete_refresh_cookie(response: Response) -> None:
         key="refresh_token",
         httponly=True,
         secure=True,
-        samesite="none",
+        samesite="lax",
         domain=".logit.ai.kr",
         path="/",
     )
