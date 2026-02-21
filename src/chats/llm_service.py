@@ -481,6 +481,9 @@ async def generate_ai_response_stream(
     # 파이프라인을 백그라운드 태스크로 시작
     asyncio.create_task(_run())
 
+    # 연결 확인용 ping 1회 전송 (Android 연결 open 확인)
+    yield json.dumps({"type": "ping"}, ensure_ascii=False)
+
     # queue에서 결과를 받아 스트리밍
     while True:
         item = await queue.get()
