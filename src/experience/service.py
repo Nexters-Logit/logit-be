@@ -1,5 +1,6 @@
 """Experience business logic."""
 
+import asyncio
 import logging
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -860,24 +861,21 @@ async def get_experiences_with_question_similarity(
     session: AsyncSession,
     user_id: str,
     question_id: UUID,
-    tag_bonus_multiplier: float = 1.0,
-    category_bonus_multiplier: float = 0.5,
 ) -> list[tuple[Experience, float]]:
     """
     Get all user experiences with similarity scores against a specific question and its project.
-    Uses embedding similarity as base score, with tag and category matching providing bonuses.
+    Uses weighted embedding similarity (question 60%, job 25%, company 15%) as base score,
+    with tag and category matching as additional signals.
 
     Args:
         client: Qdrant client
         session: Database session
         user_id: Owner user ID
         question_id: Question ID to match against
-        tag_bonus_multiplier: Multiplier for tag matching bonus (default: 1.0, means up to 100% bonus)
-        category_bonus_multiplier: Multiplier for category matching bonus (default: 0.5, means 50% bonus)
 
     Returns:
         List of tuples (Experience, similarity_score) sorted by score descending
-        Score calculation: base_score (embedding) + tag_bonus + category_bonus
+        Score calculation: embedding(70%) + tag(20%) + category(10%)
 
     Raises:
         HTTPException: If question not found, unauthorized, or search fails
@@ -914,19 +912,28 @@ async def get_experiences_with_question_similarity(
             detail="Project not found",
         )
 
-    # Combine question and project info into query text
-    query_text = f"""문항: {question.question}
-회사: {project.company}
-직무: {project.job_position}
-채용공고: {project.recruit_notice}"""
+    # Generate separate embeddings for each dimension and combine with weights
+    # Priority: 문항(0.6) > 직무(0.25) > 회사 도메인(0.15)
+    question_emb, job_emb, company_emb = await asyncio.gather(
+        _generate_embedding(f"문항: {question.question}"),
+        _generate_embedding(f"직무: {project.job_position}"),
+        _generate_embedding(f"회사: {project.company}"),
+    )
+
+    # Weighted average of embedding vectors
+    w_question, w_job, w_company = 0.6, 0.25, 0.15
+    combined = [
+        q * w_question + j * w_job + c * w_company
+        for q, j, c in zip(question_emb, job_emb, company_emb)
+    ]
+    # L2 normalize
+    norm = sum(x ** 2 for x in combined) ** 0.5
+    query_embedding = [x / norm for x in combined] if norm > 0 else combined
 
     # Extract relevant tags and category from question and project
     project_info = f"회사: {project.company}\n직무: {project.job_position}\n채용공고: {project.recruit_notice}"
     question_tags = await _extract_tags_from_question(question.question, project_info)
     question_category = await _extract_category_from_question(question.question, project_info)
-
-    # Generate query embedding
-    query_embedding = await _generate_embedding(query_text)
 
     # Filter by user_id
     user_filter = Filter(
@@ -961,22 +968,20 @@ async def get_experiences_with_question_similarity(
             detail="Internal server error while matching experiences with question.",
         ) from e
 
-    # Calculate final scores (base embedding score + tag bonus + category bonus)
+    # Calculate final scores (weighted: embedding 70% + tag 20% + category 10%)
     results_with_scores = []
     for point in search_result:
         experience = Experience(**point.payload)
-        base_score = point.score  # Embedding similarity (0~1)
+        embedding_score = point.score  # Embedding similarity (0~1)
 
         # Calculate tag matching score
         tag_score = _calculate_tag_matching_score(experience.tags, question_tags)
-        tag_bonus = tag_score * tag_bonus_multiplier if tag_score > 0 else 0.0
 
         # Calculate category matching score
         category_score = _calculate_category_matching_score(experience.category, question_category)
-        category_bonus = category_score * category_bonus_multiplier if category_score > 0 else 0.0
 
-        # Combine all scores
-        final_score = min(base_score + tag_bonus + category_bonus, 1.0)  # Cap at 1.0
+        # Weighted average (always 0~1 range, no cap needed)
+        final_score = (embedding_score * 0.7) + (tag_score * 0.2) + (category_score * 0.1)
 
         results_with_scores.append((experience, final_score))
 
