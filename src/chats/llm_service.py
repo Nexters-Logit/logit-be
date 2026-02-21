@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 from enum import Enum
@@ -358,6 +357,9 @@ async def generate_ai_response_stream(
         - {"type": "error", "message": "..."} - 에러
     """
     try:
+        # 즉시 SSE 연결 확립 (Android 타임아웃 방지 - 어떤 LLM 호출보다 먼저)
+        yield ": ping\n\n"
+
         provider = llm_provider or get_llm_provider()
 
         # 경험 데이터 조회
@@ -458,13 +460,8 @@ async def generate_ai_response_stream(
         if max_length:
             draft = await adjust_length_if_needed(draft, max_length, provider)
 
-        # 최종 결과 전송 (청크 단위 스트리밍)
-        chunk_size = 5
-        for i in range(0, len(draft), chunk_size):
-            chunk = draft[i:i + chunk_size]
-            yield json.dumps({"type": "content", "content": chunk}, ensure_ascii=False)
-            await asyncio.sleep(0.01)
-
+        # 최종 결과 전송
+        yield json.dumps({"type": "content", "content": draft}, ensure_ascii=False)
         yield json.dumps(
             {"type": "done", "content": draft, "is_draft": True},
             ensure_ascii=False,
