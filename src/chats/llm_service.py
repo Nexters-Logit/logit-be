@@ -356,120 +356,137 @@ async def generate_ai_response_stream(
         - {"type": "done", "content": "...", "is_draft": bool} - 완료
         - {"type": "error", "message": "..."} - 에러
     """
-    try:
-        provider = llm_provider or get_llm_provider()
+    queue: asyncio.Queue[str | None] = asyncio.Queue()
 
-        # 경험 데이터 조회
-        experiences: list[Experience] = []
-        if experience_ids:
-            experiences = get_experiences_by_ids(qdrant_client, experience_ids, user_id)
+    async def _run() -> None:
+        """파이프라인 전체를 백그라운드 태스크로 실행, 결과를 queue에 전달"""
+        try:
+            provider = llm_provider or get_llm_provider()
 
-        # 1단계: 요청 분류
-        classification = await classify_request(
-            user_message=user_message,
-            question=question_content,
-            provider=provider,
-        )
+            experiences: list[Experience] = []
+            if experience_ids:
+                experiences = get_experiences_by_ids(qdrant_client, experience_ids, user_id)
 
-        if not classification.is_cover_letter_request:
-            # === 대화형 응답: 실시간 스트리밍 ===
-            experiences_text = (
-                _format_experiences_plain(experiences) if experiences
-                else "선택된 경험이 없습니다."
-            )
-
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", CONVERSATION_SYSTEM_PROMPT),
-                MessagesPlaceholder(variable_name="chat_history"),
-                ("human", "{input}"),
-            ])
-            chain = prompt | provider.streaming_llm
-
-            chat_history_instance = PostgresChatMessageHistory(db=db, question_id=question_id)
-            await chat_history_instance.aget_messages()
-
-            chain_with_history = RunnableWithMessageHistory(
-                chain,
-                lambda _: chat_history_instance,
-                input_messages_key="input",
-                history_messages_key="chat_history",
-            )
-
-            full_content = ""
-            async for chunk in chain_with_history.astream(
-                {
-                    "company": company,
-                    "recruit_notice": recruit_notice or "채용공고 정보 없음",
-                    "question": question_content,
-                    "max_length": max_length or "제한 없음",
-                    "experiences": experiences_text,
-                    "input": user_message,
-                },
-                config={"configurable": {"session_id": str(question_id)}},
-            ):
-                content = chunk.content
-                if content:
-                    full_content += content
-                    yield json.dumps({"type": "content", "content": content}, ensure_ascii=False)
-
-            yield json.dumps(
-                {"type": "done", "content": full_content, "is_draft": False},
-                ensure_ascii=False,
-            )
-            return
-
-        # === 자기소개서 초안 생성: 멀티 스텝 파이프라인 ===
-        # 각 단계 전 SSE keepalive 주석 전송 (Android 연결 유지용)
-        # SSE 스펙상 ':'로 시작하는 주석은 모든 클라이언트가 무시함
-
-        # 2단계: 스토리라인 설계
-        yield ": ping\n\n"
-        storyline = await design_storyline(
-            question=question_content,
-            max_length=max_length,
-            company=company,
-            experiences=experiences,
-            provider=provider,
-        )
-
-        # 3단계: 초안 생성
-        yield ": ping\n\n"
-        draft = await generate_draft_text(
-            storyline=storyline,
-            question_type=classification.question_type,
-            question=question_content,
-            max_length=max_length,
-            company=company,
-            recruit_notice=recruit_notice,
-            provider=provider,
-        )
-
-        # 4단계: 검수
-        yield ": ping\n\n"
-        review = await review_draft(draft, experiences, provider)
-
-        # 4-1단계: 수정 (나열식/할루시네이션 문제 시)
-        if review.has_listing_pattern or review.has_hallucination:
-            yield ": ping\n\n"
-            draft = await revise_draft_text(
-                draft=draft,
-                feedback=review.feedback,
-                experiences=experiences,
-                max_length=max_length,
+            # 1단계: 요청 분류
+            classification = await classify_request(
+                user_message=user_message,
+                question=question_content,
                 provider=provider,
             )
 
-        # 4-2단계: 글자수 보정
-        if max_length:
-            draft = await adjust_length_if_needed(draft, max_length, provider)
+            if not classification.is_cover_letter_request:
+                # === 대화형 응답: 실시간 스트리밍 ===
+                experiences_text = (
+                    _format_experiences_plain(experiences) if experiences
+                    else "선택된 경험이 없습니다."
+                )
 
-        # 최종 결과 전송
-        yield json.dumps({"type": "content", "content": draft}, ensure_ascii=False)
-        yield json.dumps(
-            {"type": "done", "content": draft, "is_draft": True},
-            ensure_ascii=False,
-        )
+                prompt = ChatPromptTemplate.from_messages([
+                    ("system", CONVERSATION_SYSTEM_PROMPT),
+                    MessagesPlaceholder(variable_name="chat_history"),
+                    ("human", "{input}"),
+                ])
+                chain = prompt | provider.streaming_llm
 
-    except Exception as e:
-        logger.error(f"generate_ai_response_stream error: {e}", exc_info=True)
-        yield json.dumps({"type": "error", "message": str(e)}, ensure_ascii=False)
+                chat_history_instance = PostgresChatMessageHistory(db=db, question_id=question_id)
+                await chat_history_instance.aget_messages()
+
+                chain_with_history = RunnableWithMessageHistory(
+                    chain,
+                    lambda _: chat_history_instance,
+                    input_messages_key="input",
+                    history_messages_key="chat_history",
+                )
+
+                full_content = ""
+                async for chunk in chain_with_history.astream(
+                    {
+                        "company": company,
+                        "recruit_notice": recruit_notice or "채용공고 정보 없음",
+                        "question": question_content,
+                        "max_length": max_length or "제한 없음",
+                        "experiences": experiences_text,
+                        "input": user_message,
+                    },
+                    config={"configurable": {"session_id": str(question_id)}},
+                ):
+                    content = chunk.content
+                    if content:
+                        full_content += content
+                        await queue.put(json.dumps({"type": "content", "content": content}, ensure_ascii=False))
+
+                await queue.put(json.dumps(
+                    {"type": "done", "content": full_content, "is_draft": False},
+                    ensure_ascii=False,
+                ))
+
+            else:
+                # === 자기소개서 초안 생성: 멀티 스텝 파이프라인 ===
+
+                # 2단계: 스토리라인 설계
+                storyline = await design_storyline(
+                    question=question_content,
+                    max_length=max_length,
+                    company=company,
+                    experiences=experiences,
+                    provider=provider,
+                )
+
+                # 3단계: 초안 생성
+                draft = await generate_draft_text(
+                    storyline=storyline,
+                    question_type=classification.question_type,
+                    question=question_content,
+                    max_length=max_length,
+                    company=company,
+                    recruit_notice=recruit_notice,
+                    provider=provider,
+                )
+
+                # 4단계: 검수
+                review = await review_draft(draft, experiences, provider)
+
+                # 4-1단계: 수정 (나열식/할루시네이션 문제 시)
+                if review.has_listing_pattern or review.has_hallucination:
+                    draft = await revise_draft_text(
+                        draft=draft,
+                        feedback=review.feedback,
+                        experiences=experiences,
+                        max_length=max_length,
+                        provider=provider,
+                    )
+
+                # 4-2단계: 글자수 보정
+                if max_length:
+                    draft = await adjust_length_if_needed(draft, max_length, provider)
+
+                # 청크 단위 스트리밍 (5자씩, 100ms 간격)
+                chunk_size = 5
+                for i in range(0, len(draft), chunk_size):
+                    await queue.put(json.dumps({"type": "content", "content": draft[i:i + chunk_size]}, ensure_ascii=False))
+                    await asyncio.sleep(0.1)
+
+                await queue.put(json.dumps(
+                    {"type": "done", "content": draft, "is_draft": True},
+                    ensure_ascii=False,
+                ))
+
+        except Exception as e:
+            logger.error(f"generate_ai_response_stream error: {e}", exc_info=True)
+            await queue.put(json.dumps({"type": "error", "message": str(e)}, ensure_ascii=False))
+        finally:
+            await queue.put(None)  # 완료 신호
+
+    # 파이프라인을 백그라운드 태스크로 시작
+    asyncio.create_task(_run())
+
+    # queue에서 결과를 받으며 5초마다 ping 전송 (Android 연결 유지)
+    HEARTBEAT_INTERVAL = 5.0
+    while True:
+        try:
+            item = await asyncio.wait_for(queue.get(), timeout=HEARTBEAT_INTERVAL)
+            if item is None:
+                break
+            yield item
+        except asyncio.TimeoutError:
+            yield json.dumps({"type": "ping"}, ensure_ascii=False)
