@@ -12,6 +12,7 @@ from src.config import settings
 async_engine = create_async_engine(
     str(settings.SQLALCHEMY_DATABASE_URI),
     future=True,
+    pool_pre_ping=True,
 )
 
 
