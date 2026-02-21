@@ -45,7 +45,7 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
         value=refresh_token,
         httponly=True,
         secure=True,
-        samesite="lax",
+        samesite="none",
         path="/",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
     )
@@ -57,7 +57,7 @@ def _delete_refresh_cookie(response: Response) -> None:
         key="refresh_token",
         httponly=True,
         secure=True,
-        samesite="lax",
+        samesite="none",
         path="/",
     )
 
@@ -408,7 +408,9 @@ async def refresh_access_token(
         })
 
     # web
-    response = JSONResponse(content={"access_token": new_access_token})
+    response = JSONResponse(content={
+        "access_token": new_access_token,
+    })
     _set_refresh_cookie(response, new_refresh_token)
     return response
 
