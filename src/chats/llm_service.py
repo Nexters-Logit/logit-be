@@ -107,9 +107,9 @@ def _format_experience_with_role(exp: Experience, is_primary: bool, score: float
             lines.append(f"- 해결(S): {exp.solution}")
         if exp.insight:
             lines.append(f"- 인사이트(I): {exp.insight}")
-    else:  # FREE
+    else:  # FREE - 자유 형식: 내용에서 직접 핵심 사실 추출 필요
         if exp.content:
-            lines.append(f"- 내용: {exp.content}")
+            lines.append(f"- 경험 내용 (자유 형식, 핵심 사실을 직접 추출하세요): {exp.content}")
 
     return "\n".join(lines)
 
