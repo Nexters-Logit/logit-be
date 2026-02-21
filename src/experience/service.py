@@ -36,8 +36,8 @@ from src.questions.models import Question
 openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
 # Content quality patterns
-_MEANINGFUL_CHAR_PATTERN = re.compile(r'[가-힣a-zA-Z0-9]')
 _HANGUL_JAMO_ONLY_PATTERN = re.compile(r'^[ㄱ-ㅎㅏ-ㅣ\s.,!?~ㅋㅎㅠㅜ]+$')
+_REPEATED_CHAR_PATTERN = re.compile(r'(.)\1{3,}')  # 같은 문자 4번 이상 반복
 _MIN_CONTENT_LENGTH = 20  # 본문 최소 글자수 기준
 
 
@@ -421,23 +421,28 @@ def _calculate_content_quality(experience: Experience) -> float:
 
     combined = " ".join(content_parts)
 
+    total_chars = len(combined.replace(" ", ""))
+    if total_chars == 0:
+        return 0.1
+
     # 자모만으로 이루어진 텍스트 (ㅋㅋㅋ, ㅎㅎㅎ 등)
     if _HANGUL_JAMO_ONLY_PATTERN.match(combined):
         return 0.1
 
-    # 의미 있는 문자 비율 (완성된 한글, 영문, 숫자)
-    meaningful_chars = len(_MEANINGFUL_CHAR_PATTERN.findall(combined))
-    total_chars = len(combined.replace(" ", ""))
-
-    if total_chars == 0:
+    # 같은 문자 반복 패턴 (aaaa, ㅋㅋㅋㅋ 등)
+    if _REPEATED_CHAR_PATTERN.search(combined):
         return 0.1
 
-    quality_ratio = meaningful_chars / total_chars
+    # 문자 다양성이 극단적으로 낮으면 쓰레기 입력 (abcabc, 123123 등)
+    unique_ratio = len(set(combined.replace(" ", ""))) / total_chars
+    if unique_ratio < 0.2:
+        return 0.1
 
-    # 최소 글자수 기준 미만이면 감점
-    length_factor = min(len(combined) / _MIN_CONTENT_LENGTH, 1.0)
+    # 최소 글자수 미만이면 소폭 감점, 그 외는 정상
+    if total_chars < _MIN_CONTENT_LENGTH:
+        return 0.7
 
-    return min(quality_ratio * length_factor, 1.0)
+    return 1.0
 
 
 def _calculate_category_matching_score(experience_category: str, question_category: str | None) -> float:
