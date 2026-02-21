@@ -126,10 +126,7 @@ async def send_chat_stream(
     ):
         chunk_data = json.loads(chunk_json)
 
-        if chunk_data["type"] == "progress":
-            yield f"data: {chunk_json}\n\n"
-
-        elif chunk_data["type"] == "content":
+        if chunk_data["type"] == "content":
             full_content += chunk_data["content"]
             yield f"data: {chunk_json}\n\n"
 
