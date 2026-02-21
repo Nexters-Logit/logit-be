@@ -46,6 +46,7 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
         httponly=True,
         secure=True,
         samesite="lax",
+        domain=".logit.ai.kr",
         path="/",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
     )
@@ -58,6 +59,7 @@ def _delete_refresh_cookie(response: Response) -> None:
         httponly=True,
         secure=True,
         samesite="lax",
+        domain=".logit.ai.kr",
         path="/",
     )
 
@@ -408,7 +410,9 @@ async def refresh_access_token(
         })
 
     # web
-    response = JSONResponse(content={"access_token": new_access_token})
+    response = JSONResponse(content={
+        "access_token": new_access_token,
+    })
     _set_refresh_cookie(response, new_refresh_token)
     return response
 
