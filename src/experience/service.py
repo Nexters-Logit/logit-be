@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 from datetime import datetime
 from uuid import UUID, uuid4
 
@@ -33,6 +34,11 @@ from src.questions.models import Question
 
 # Initialize OpenAI async client
 openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+
+# Content quality patterns
+_MEANINGFUL_CHAR_PATTERN = re.compile(r'[가-힣a-zA-Z0-9]')
+_HANGUL_JAMO_ONLY_PATTERN = re.compile(r'^[ㄱ-ㅎㅏ-ㅣ\s.,!?~ㅋㅎㅠㅜ]+$')
+_MIN_CONTENT_LENGTH = 20  # 본문 최소 글자수 기준
 
 
 def _sanitize_for_logging(text: str, max_length: int = 50) -> str:
@@ -385,6 +391,53 @@ async def _extract_category_from_question(question_text: str, project_info: str)
         )
         # Fallback: return None if AI fails
         return None
+
+
+def _calculate_content_quality(experience: Experience) -> float:
+    """
+    경험 내용의 품질을 0.0~1.0으로 평가.
+    제목을 제외한 본문 필드가 의미 있는 텍스트인지 판단.
+
+    Returns:
+        1.0: 충분한 내용, 0.0: 내용 없음/무의미
+    """
+    # 제목 외 본문 텍스트 수집
+    content_parts = []
+    if experience.format_type == ExperienceFormatType.STAR:
+        for field in [experience.situation, experience.task, experience.action, experience.result]:
+            if field:
+                content_parts.append(field)
+    elif experience.format_type == ExperienceFormatType.PSI:
+        for field in [experience.problem, experience.solution, experience.insight]:
+            if field:
+                content_parts.append(field)
+    elif experience.format_type == ExperienceFormatType.FREE:
+        if experience.content:
+            content_parts.append(experience.content)
+
+    # 본문 필드가 아예 없으면 페널티
+    if not content_parts:
+        return 0.2
+
+    combined = " ".join(content_parts)
+
+    # 자모만으로 이루어진 텍스트 (ㅋㅋㅋ, ㅎㅎㅎ 등)
+    if _HANGUL_JAMO_ONLY_PATTERN.match(combined):
+        return 0.1
+
+    # 의미 있는 문자 비율 (완성된 한글, 영문, 숫자)
+    meaningful_chars = len(_MEANINGFUL_CHAR_PATTERN.findall(combined))
+    total_chars = len(combined.replace(" ", ""))
+
+    if total_chars == 0:
+        return 0.1
+
+    quality_ratio = meaningful_chars / total_chars
+
+    # 최소 글자수 기준 미만이면 감점
+    length_factor = min(len(combined) / _MIN_CONTENT_LENGTH, 1.0)
+
+    return min(quality_ratio * length_factor, 1.0)
 
 
 def _calculate_category_matching_score(experience_category: str, question_category: str | None) -> float:
@@ -968,20 +1021,22 @@ async def get_experiences_with_question_similarity(
             detail="Internal server error while matching experiences with question.",
         ) from e
 
-    # Calculate final scores (weighted: embedding 70% + tag 20% + category 10%)
+    # Calculate final scores (embedding base + small bonuses, penalized by content quality)
     results_with_scores = []
     for point in search_result:
         experience = Experience(**point.payload)
-        embedding_score = point.score  # Embedding similarity (0~1)
+        base_score = point.score  # Embedding similarity (cosine, ~0.3~0.8)
 
-        # Calculate tag matching score
+        # Tag/category matching as small bonuses
         tag_score = _calculate_tag_matching_score(experience.tags, question_tags)
-
-        # Calculate category matching score
         category_score = _calculate_category_matching_score(experience.category, question_category)
 
-        # Weighted average (always 0~1 range, no cap needed)
-        final_score = (embedding_score * 0.7) + (tag_score * 0.2) + (category_score * 0.1)
+        # Content quality penalty (0.1~1.0)
+        quality = _calculate_content_quality(experience)
+
+        # Base score + small bonuses, multiplied by content quality
+        raw_score = base_score + (tag_score * 0.1) + (category_score * 0.05)
+        final_score = min(raw_score * quality, 1.0)
 
         results_with_scores.append((experience, final_score))
 
