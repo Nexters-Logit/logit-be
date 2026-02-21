@@ -124,10 +124,16 @@ async def send_chat_stream(
         qdrant_client=qdrant_client,
         user_id=str(user_id),
     ):
+        # SSE 주석(keepalive ping)은 직접 전달
+        if chunk_json.startswith(":"):
+            yield chunk_json
+            continue
+
         chunk_data = json.loads(chunk_json)
 
         if chunk_data["type"] == "content":
             full_content += chunk_data["content"]
+            logger.info(f"[SSE] content chunk sent ({len(chunk_data['content'])}자)")
             yield f"data: {chunk_json}\n\n"
 
         elif chunk_data["type"] == "done":

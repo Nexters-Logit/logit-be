@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 from enum import Enum
@@ -420,8 +419,11 @@ async def generate_ai_response_stream(
             return
 
         # === 자기소개서 초안 생성: 멀티 스텝 파이프라인 ===
+        # 각 단계 전 SSE keepalive 주석 전송 (Android 연결 유지용)
+        # SSE 스펙상 ':'로 시작하는 주석은 모든 클라이언트가 무시함
 
         # 2단계: 스토리라인 설계
+        yield ": ping\n\n"
         storyline = await design_storyline(
             question=question_content,
             max_length=max_length,
@@ -431,6 +433,7 @@ async def generate_ai_response_stream(
         )
 
         # 3단계: 초안 생성
+        yield ": ping\n\n"
         draft = await generate_draft_text(
             storyline=storyline,
             question_type=classification.question_type,
@@ -442,10 +445,12 @@ async def generate_ai_response_stream(
         )
 
         # 4단계: 검수
+        yield ": ping\n\n"
         review = await review_draft(draft, experiences, provider)
 
         # 4-1단계: 수정 (나열식/할루시네이션 문제 시)
         if review.has_listing_pattern or review.has_hallucination:
+            yield ": ping\n\n"
             draft = await revise_draft_text(
                 draft=draft,
                 feedback=review.feedback,
@@ -458,13 +463,8 @@ async def generate_ai_response_stream(
         if max_length:
             draft = await adjust_length_if_needed(draft, max_length, provider)
 
-        # 최종 결과 전송 (청크 단위 스트리밍)
-        chunk_size = 5
-        for i in range(0, len(draft), chunk_size):
-            chunk = draft[i:i + chunk_size]
-            yield json.dumps({"type": "content", "content": chunk}, ensure_ascii=False)
-            await asyncio.sleep(0.01)
-
+        # 최종 결과 전송
+        yield json.dumps({"type": "content", "content": draft}, ensure_ascii=False)
         yield json.dumps(
             {"type": "done", "content": draft, "is_draft": True},
             ensure_ascii=False,
