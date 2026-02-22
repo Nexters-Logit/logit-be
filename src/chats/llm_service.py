@@ -192,14 +192,18 @@ async def _check_hallucination(
     """할루시네이션 감지 (yes/no LLM, structured output 없이 ~2-3s)"""
     if not experiences:
         return False
-    experiences_text = _format_experiences_plain(experiences)
-    response = await provider.classification_llm.ainvoke(
-        HALLUCINATION_CHECK_PROMPT.format(
-            experiences=experiences_text,
-            draft=draft,
+    try:
+        experiences_text = _format_experiences_plain(experiences)
+        response = await provider.classification_llm.ainvoke(
+            HALLUCINATION_CHECK_PROMPT.format(
+                experiences=experiences_text,
+                draft=draft,
+            )
         )
-    )
-    return response.content.strip().lower().startswith("yes")
+        return response.content.strip().lower().startswith("yes")
+    except Exception:
+        logger.warning("Hallucination check failed, skipping", exc_info=True)
+        return False
 
 
 # ============================================================
