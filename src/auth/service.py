@@ -131,16 +131,13 @@ async def _find_or_create_user(
     if existing_user:
         return existing_user, False
 
-    # 2) 동일 email이 다른 provider로 이미 가입되어 있는지 확인
+    # 2) 동일 email로 이미 가입된 사용자가 있으면 기존 계정으로 로그인
     email_user = await user_service.get_user_by_email(
         session=session, email=email
     )
 
     if email_user:
-        raise OAuthError(
-            f"This email is already registered with {email_user.oauth_provider.value}. "
-            f"Please sign in with {email_user.oauth_provider.value}."
-        )
+        return email_user, False
 
     try:
         new_user = await create_oauth_user(
@@ -275,12 +272,20 @@ async def _verify_google_id_token(id_token: str) -> dict:
     kid = unverified_header.get("kid")
     signing_key = await _find_jwks_key(kid, _get_google_jwks, "Google")
 
+    allowed_audiences = [
+        aud for aud in [
+            settings.GOOGLE_CLIENT_ID,
+            settings.GOOGLE_IOS_CLIENT_ID,
+            settings.GOOGLE_ANDROID_CLIENT_ID,
+        ] if aud
+    ]
+
     try:
         decoded = jwt.decode(
             id_token,
             signing_key.key,
             algorithms=["RS256"],
-            audience=settings.GOOGLE_CLIENT_ID,
+            audience=allowed_audiences,
             issuer=["https://accounts.google.com", "accounts.google.com"],
         )
     except jwt.PyJWTError as e:
@@ -318,7 +323,7 @@ async def google_mobile_auth_flow(id_token: str, session: AsyncSession) -> dict:
 
 
 async def _verify_apple_id_token(
-    id_token: str, platform: str, nonce: str | None = None
+    id_token: str, nonce: str | None = None,
 ) -> dict:
     """
     Apple id_token을 비동기 JWKS로 검증하고 디코딩된 페이로드를 반환합니다.
@@ -330,16 +335,16 @@ async def _verify_apple_id_token(
 
     kid = unverified_header.get("kid")
     signing_key = await _find_jwks_key(kid, _get_apple_jwks, "Apple")
-    audience = settings.APPLE_CLIENT_ID
-    if platform == "app":
-        audience = audience[:-3]
+    allowed_audiences = [settings.APPLE_CLIENT_ID]
+    if settings.APPLE_CLIENT_ID:
+        allowed_audiences.append(settings.APPLE_CLIENT_ID[:-3])  # bundle id (앱용)
 
     try:
         decoded = jwt.decode(
             id_token,
             signing_key.key,
             algorithms=["RS256"],
-            audience=audience,
+            audience=allowed_audiences,
             issuer="https://appleid.apple.com",
         )
     except jwt.PyJWTError as e:
@@ -416,7 +421,7 @@ async def apple_oauth_flow(
         if not id_token:
             raise OAuthError("No id_token in response from Apple")
 
-        decoded = await _verify_apple_id_token(id_token, "web", nonce=nonce)
+        decoded = await _verify_apple_id_token(id_token, nonce=nonce)
         apple_sub = decoded["sub"]
         email = decoded["email"]
 
@@ -450,7 +455,7 @@ async def apple_mobile_auth_flow(
     모바일용 Apple 로그인.
     네이티브 SDK에서 받은 id_token을 JWKS로 검증하고 JWT 토큰 발급.
     """
-    decoded = await _verify_apple_id_token(id_token, "app")
+    decoded = await _verify_apple_id_token(id_token)
     apple_sub = decoded["sub"]
     email = decoded["email"]
 

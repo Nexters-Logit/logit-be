@@ -84,6 +84,36 @@ services:
     networks:
       - logit-network
 
+  # Logit MCP Server
+  logit-mcp:
+    build:
+      context: ../logit-mcp
+      dockerfile: Dockerfile
+    container_name: logit-mcp
+    restart: unless-stopped
+    expose:
+      - "8001"
+    env_file:
+      - ../logit-mcp/.env
+    environment:
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_PORT=5432
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - logit-network
+
   # PostgreSQL Database
   postgres:
     image: postgres:16-alpine

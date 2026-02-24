@@ -79,20 +79,41 @@ update_caddyfile() {
 # Active upstream: app-${target}
 
 {\$DOMAIN:api.logit.ai.kr} {
-    # Reverse proxy to active app
-    reverse_proxy app-${target}:8000
+    reverse_proxy app-${target}:8000 {
+        health_uri      /health
+        health_interval 10s
+        health_timeout  5s
+    }
 
-    # Enable compression
     encode gzip
 
-    # Security headers
     header {
         X-Content-Type-Options nosniff
         X-Frame-Options DENY
         Referrer-Policy strict-origin-when-cross-origin
     }
 
-    # Logging
+    log {
+        output stdout
+        format console
+    }
+}
+
+mcp.logit.ai.kr {
+    reverse_proxy logit-mcp:8001 {
+        health_uri      /health
+        health_interval 10s
+        health_timeout  5s
+    }
+
+    encode gzip
+
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+
     log {
         output stdout
         format console

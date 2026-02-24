@@ -104,6 +104,8 @@ class Settings(BaseSettings):
     # OAuth - Google
     GOOGLE_CLIENT_ID: str | None = None
     GOOGLE_CLIENT_SECRET: str | None = None
+    GOOGLE_IOS_CLIENT_ID: str | None = None
+    GOOGLE_ANDROID_CLIENT_ID: str | None = None
 
     # OAuth - Apple
     APPLE_CLIENT_ID: str | None = None
