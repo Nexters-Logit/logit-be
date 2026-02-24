@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth import constants
-from src.auth.utils import get_oauth_redirect_uri
+from src.auth.utils import generate_random_nickname, get_oauth_redirect_uri
 from src.auth.exceptions import (
     InvalidTokenError,
     OAuthError,
@@ -422,7 +422,7 @@ async def apple_oauth_flow(
         provider=OAuthProvider.apple,
         provider_id=apple_sub,
         email=email,
-        name=full_name or None,
+        name=full_name or generate_random_nickname(),
         picture=None,
     )
 
@@ -445,7 +445,7 @@ async def apple_mobile_auth_flow(
         provider=OAuthProvider.apple,
         provider_id=apple_sub,
         email=email,
-        name=full_name,
+        name=full_name or generate_random_nickname(),
         picture=None,
     )
 
