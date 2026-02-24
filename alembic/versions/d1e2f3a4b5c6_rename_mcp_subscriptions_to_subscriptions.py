@@ -33,7 +33,7 @@ def upgrade() -> None:
 
     # type 컬럼 추가 (enum 타입, 기존 데이터는 모두 mcp)
     op.add_column('subscriptions', sa.Column(
-        'type', subscriptiontype_enum, nullable=False, server_default='mcp',
+        'type', subscriptiontype_enum, nullable=False, server_default=sa.text("'mcp'"),
     ))
 
     # plan 컬럼을 String -> Enum으로 변경
@@ -63,6 +63,7 @@ def downgrade() -> None:
         existing_type=sa.Enum('free_trial', 'basic', 'pro', name='subscriptionplan'),
         existing_nullable=False,
         server_default=sa.text("'basic'"),
+        postgresql_using="plan::text",
     )
     op.drop_index('ix_subscriptions_user_id', table_name='subscriptions')
     op.drop_constraint('uq_subscription_user_type', 'subscriptions', type_='unique')
