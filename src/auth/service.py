@@ -1,6 +1,7 @@
 """Authentication service layer - OAuth and JWT logic."""
 
 import json
+import logging
 import time
 from collections.abc import Callable, Coroutine
 from datetime import datetime, timedelta, timezone
@@ -22,8 +23,11 @@ from src.auth.exceptions import (
 from src.auth.schemas import OAuthUserCreate
 from src.config import settings
 from src.security import create_access_token, create_refresh_token
+from src.subscription.models import Subscription, SubscriptionPlan, SubscriptionType
 from src.users import service as user_service
 from src.users.models import OAuthProvider, User
+
+logger = logging.getLogger(__name__)
 
 # JWKS 비동기 캐시 (Google / Apple 공용 패턴)
 _JWKS_CACHE_TTL = 3600  # 1시간
@@ -171,6 +175,28 @@ async def _generate_tokens_for_user(
     await user_service.update_refresh_token(
         session=session, db_user=user, refresh_token=refresh_token
     )
+
+    # 신규 유저: MCP 무료 체험 구독 (30일) 자동 생성
+    if is_new_user:
+        try:
+            now = datetime.now(timezone.utc)
+            mcp_subscription = Subscription(
+                user_id=user.id,
+                sub_type=SubscriptionType.MCP,
+                is_active=True,
+                plan=SubscriptionPlan.FREE_TRIAL,
+                started_at=now,
+                expires_at=now + timedelta(days=30),
+            )
+            session.add(mcp_subscription)
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            logger.warning(
+                "Failed to create MCP free trial subscription for user %s",
+                user.id,
+                exc_info=True,
+            )
 
     return {
         "is_new_user": is_new_user,

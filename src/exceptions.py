@@ -30,6 +30,16 @@ class UserNotFoundError(HTTPException):
         )
 
 
+class ForbiddenError(HTTPException):
+    """리소스 접근 권한 없음 (인증은 됐지만 본인 리소스가 아님)."""
+
+    def __init__(self, detail: str = "Access to this resource is forbidden."):
+        super().__init__(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=detail,
+        )
+
+
 class InactiveUserError(HTTPException):
     """비활성 사용자."""
 

@@ -26,6 +26,7 @@ from src.questions import router as questions_router
 from src.users import router as users_router
 from src.chats import router as chats_router
 from src.report import router as report_router
+from src.subscription import router as subscription_router
 from src.common.slack import send_error_notification
 
 # Load logging configuration
@@ -211,6 +212,11 @@ app.include_router(
     report_router.router,
     prefix=f"{settings.API_V1_STR}/report",
     tags=["Report"],
+)
+app.include_router(
+    subscription_router.router,
+    prefix=f"{settings.API_V1_STR}/subscriptions",
+    tags=["Subscriptions"],
 )
 
 @app.get("/")
