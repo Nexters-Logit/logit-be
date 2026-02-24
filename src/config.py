@@ -117,7 +117,7 @@ class Settings(BaseSettings):
     OPENAI_TEMPERATURE: float = 0.7
 
     # MCP
-    MCP_JWT_SECRET: str | None = None
+    MCP_JWT_SECRET: str
     MCP_TOKEN_EXPIRE_DAYS: int = 30
 
     # Chat Rate Limit
