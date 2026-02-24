@@ -1,7 +1,7 @@
 from collections.abc import AsyncGenerator
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PayloadSchemaType, VectorParams
+from qdrant_client.models import Distance, VectorParams
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -70,12 +70,6 @@ def init_qdrant_collection() -> None:
     else:
         print(f"Qdrant collection already exists: {settings.QDRANT_COLLECTION_NAME}")
 
-    # created_at 필드에 payload 인덱스 생성 (정렬용)
-    client.create_payload_index(
-        collection_name=settings.QDRANT_COLLECTION_NAME,
-        field_name="created_at",
-        field_schema=PayloadSchemaType.DATETIME,
-    )
 
 
 # Redis client (singleton)
