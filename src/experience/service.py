@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 from fastapi import HTTPException, status
 from openai import AsyncOpenAI, APIError, APIConnectionError, RateLimitError, AuthenticationError
 from qdrant_client import QdrantClient
-from qdrant_client.models import Filter, FieldCondition, MatchValue, PointStruct
+from qdrant_client.models import Direction, Filter, FieldCondition, MatchValue, OrderBy, PointStruct
 from qdrant_client.http.exceptions import UnexpectedResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -633,7 +633,7 @@ def list_experiences(
     )
 
     try:
-        # Scroll to get matching points for current page
+        # Scroll to get matching points for current page (newest first)
         scroll_result = client.scroll(
             collection_name=settings.QDRANT_COLLECTION_NAME,
             scroll_filter=user_filter,
@@ -641,6 +641,10 @@ def list_experiences(
             offset=offset,
             with_payload=True,
             with_vectors=False,
+            order_by=OrderBy(
+                key="created_at",
+                direction=Direction.DESC,
+            ),
         )
 
         points, _ = scroll_result  # Unpack, ignore next_offset
