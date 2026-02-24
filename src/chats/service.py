@@ -11,6 +11,7 @@ from .models import Chat, ChatRole
 from .schemas import ChatHistoryResponse, ChatHistoryItem
 from .llm_service import generate_ai_response_stream
 from .rate_limit import ChatRateLimiter
+from src.exceptions import ForbiddenError
 from src.questions.models import Question
 from src.projects.models import Project
 
@@ -90,8 +91,11 @@ async def send_chat_stream(
 
     # 1. Question 조회
     question = await get_question_by_id(db, question_id)
-    if not question or question.user_id != user_id:
+    if not question:
         yield f"data: {json.dumps({'type': 'error', 'message': 'Question not found'}, ensure_ascii=False)}\n\n"
+        return
+    if question.user_id != user_id:
+        yield f"data: {json.dumps({'type': 'error', 'message': 'Access to this resource is forbidden.'}, ensure_ascii=False)}\n\n"
         return
 
     # 2. Project 조회
@@ -126,7 +130,10 @@ async def send_chat_stream(
     ):
         chunk_data = json.loads(chunk_json)
 
-        if chunk_data["type"] == "content":
+        if chunk_data["type"] == "ping":
+            yield f"data: {chunk_json}\n\n"
+
+        elif chunk_data["type"] == "content":
             full_content += chunk_data["content"]
             yield f"data: {chunk_json}\n\n"
 
@@ -187,8 +194,10 @@ async def get_chat_history_response(
     question_result = await db.execute(question_stmt)
     question = question_result.scalar_one_or_none()
 
-    if not question or question.user_id != user_id:
+    if not question:
         return None
+    if question.user_id != user_id:
+        raise ForbiddenError()
 
     # 2. Project 조회
     project_stmt = select(Project).where(Project.id == question.project_id)

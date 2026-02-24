@@ -1,6 +1,8 @@
 """Experience business logic."""
 
+import asyncio
 import logging
+import re
 from datetime import datetime
 from uuid import UUID, uuid4
 
@@ -32,6 +34,11 @@ from src.questions.models import Question
 
 # Initialize OpenAI async client
 openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+
+# Content quality patterns
+_HANGUL_JAMO_ONLY_PATTERN = re.compile(r'^[ㄱ-ㅎㅏ-ㅣ\s.,!?~ㅋㅎㅠㅜ]+$')
+_REPEATED_CHAR_PATTERN = re.compile(r'(.)\1{3,}')  # 같은 문자 4번 이상 반복
+_MIN_CONTENT_LENGTH = 20  # 본문 최소 글자수 기준
 
 
 def _sanitize_for_logging(text: str, max_length: int = 50) -> str:
@@ -384,6 +391,58 @@ async def _extract_category_from_question(question_text: str, project_info: str)
         )
         # Fallback: return None if AI fails
         return None
+
+
+def _calculate_content_quality(experience: Experience) -> float:
+    """
+    경험 내용의 품질을 0.0~1.0으로 평가.
+    제목을 제외한 본문 필드가 의미 있는 텍스트인지 판단.
+
+    Returns:
+        1.0: 충분한 내용, 0.0: 내용 없음/무의미
+    """
+    # 제목 외 본문 텍스트 수집
+    content_parts = []
+    if experience.format_type == ExperienceFormatType.STAR:
+        for field in [experience.situation, experience.task, experience.action, experience.result]:
+            if field:
+                content_parts.append(field)
+    elif experience.format_type == ExperienceFormatType.PSI:
+        for field in [experience.problem, experience.solution, experience.insight]:
+            if field:
+                content_parts.append(field)
+    elif experience.format_type == ExperienceFormatType.FREE:
+        if experience.content:
+            content_parts.append(experience.content)
+
+    # 본문 필드가 아예 없으면 페널티
+    if not content_parts:
+        return 0.2
+
+    combined = " ".join(content_parts)
+
+    total_chars = len(combined.replace(" ", ""))
+    if total_chars == 0:
+        return 0.1
+
+    # 자모만으로 이루어진 텍스트 (ㅋㅋㅋ, ㅎㅎㅎ 등)
+    if _HANGUL_JAMO_ONLY_PATTERN.match(combined):
+        return 0.1
+
+    # 같은 문자 반복 패턴 (aaaa, ㅋㅋㅋㅋ 등)
+    if _REPEATED_CHAR_PATTERN.search(combined):
+        return 0.1
+
+    # 문자 다양성이 극단적으로 낮으면 쓰레기 입력 (abcabc, 123123 등)
+    unique_ratio = len(set(combined.replace(" ", ""))) / total_chars
+    if unique_ratio < 0.2:
+        return 0.1
+
+    # 최소 글자수 미만이면 소폭 감점, 그 외는 정상
+    if total_chars < _MIN_CONTENT_LENGTH:
+        return 0.7
+
+    return 1.0
 
 
 def _calculate_category_matching_score(experience_category: str, question_category: str | None) -> float:
@@ -860,24 +919,21 @@ async def get_experiences_with_question_similarity(
     session: AsyncSession,
     user_id: str,
     question_id: UUID,
-    tag_bonus_multiplier: float = 1.0,
-    category_bonus_multiplier: float = 0.5,
 ) -> list[tuple[Experience, float]]:
     """
     Get all user experiences with similarity scores against a specific question and its project.
-    Uses embedding similarity as base score, with tag and category matching providing bonuses.
+    Uses weighted embedding similarity (question 60%, job 25%, company 15%) as base score,
+    with tag and category matching as additional signals.
 
     Args:
         client: Qdrant client
         session: Database session
         user_id: Owner user ID
         question_id: Question ID to match against
-        tag_bonus_multiplier: Multiplier for tag matching bonus (default: 1.0, means up to 100% bonus)
-        category_bonus_multiplier: Multiplier for category matching bonus (default: 0.5, means 50% bonus)
 
     Returns:
         List of tuples (Experience, similarity_score) sorted by score descending
-        Score calculation: base_score (embedding) + tag_bonus + category_bonus
+        Score calculation: embedding(70%) + tag(20%) + category(10%)
 
     Raises:
         HTTPException: If question not found, unauthorized, or search fails
@@ -914,19 +970,28 @@ async def get_experiences_with_question_similarity(
             detail="Project not found",
         )
 
-    # Combine question and project info into query text
-    query_text = f"""문항: {question.question}
-회사: {project.company}
-직무: {project.job_position}
-채용공고: {project.recruit_notice}"""
+    # Generate separate embeddings for each dimension and combine with weights
+    # Priority: 문항(0.6) > 직무(0.25) > 회사 도메인(0.15)
+    question_emb, job_emb, company_emb = await asyncio.gather(
+        _generate_embedding(f"문항: {question.question}"),
+        _generate_embedding(f"직무: {project.job_position}"),
+        _generate_embedding(f"회사: {project.company}"),
+    )
+
+    # Weighted average of embedding vectors
+    w_question, w_job, w_company = 0.6, 0.25, 0.15
+    combined = [
+        q * w_question + j * w_job + c * w_company
+        for q, j, c in zip(question_emb, job_emb, company_emb)
+    ]
+    # L2 normalize
+    norm = sum(x ** 2 for x in combined) ** 0.5
+    query_embedding = [x / norm for x in combined] if norm > 0 else combined
 
     # Extract relevant tags and category from question and project
     project_info = f"회사: {project.company}\n직무: {project.job_position}\n채용공고: {project.recruit_notice}"
     question_tags = await _extract_tags_from_question(question.question, project_info)
     question_category = await _extract_category_from_question(question.question, project_info)
-
-    # Generate query embedding
-    query_embedding = await _generate_embedding(query_text)
 
     # Filter by user_id
     user_filter = Filter(
@@ -961,22 +1026,22 @@ async def get_experiences_with_question_similarity(
             detail="Internal server error while matching experiences with question.",
         ) from e
 
-    # Calculate final scores (base embedding score + tag bonus + category bonus)
+    # Calculate final scores (embedding base + small bonuses, penalized by content quality)
     results_with_scores = []
     for point in search_result:
         experience = Experience(**point.payload)
-        base_score = point.score  # Embedding similarity (0~1)
+        base_score = point.score  # Embedding similarity (cosine, ~0.3~0.8)
 
-        # Calculate tag matching score
+        # Tag/category matching as small bonuses
         tag_score = _calculate_tag_matching_score(experience.tags, question_tags)
-        tag_bonus = tag_score * tag_bonus_multiplier if tag_score > 0 else 0.0
-
-        # Calculate category matching score
         category_score = _calculate_category_matching_score(experience.category, question_category)
-        category_bonus = category_score * category_bonus_multiplier if category_score > 0 else 0.0
 
-        # Combine all scores
-        final_score = min(base_score + tag_bonus + category_bonus, 1.0)  # Cap at 1.0
+        # Content quality penalty (0.1~1.0)
+        quality = _calculate_content_quality(experience)
+
+        # Base score + small bonuses, multiplied by content quality
+        raw_score = base_score + (tag_score * 0.1) + (category_score * 0.05)
+        final_score = min(raw_score * quality, 1.0)
 
         results_with_scores.append((experience, final_score))
 

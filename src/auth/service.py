@@ -1,6 +1,7 @@
 """Authentication service layer - OAuth and JWT logic."""
 
 import json
+import logging
 import time
 from collections.abc import Callable, Coroutine
 from datetime import datetime, timedelta, timezone
@@ -22,8 +23,11 @@ from src.auth.exceptions import (
 from src.auth.schemas import OAuthUserCreate
 from src.config import settings
 from src.security import create_access_token, create_refresh_token
+from src.subscription.models import Subscription, SubscriptionPlan, SubscriptionType
 from src.users import service as user_service
 from src.users.models import OAuthProvider, User
+
+logger = logging.getLogger(__name__)
 
 # JWKS 비동기 캐시 (Google / Apple 공용 패턴)
 _JWKS_CACHE_TTL = 3600  # 1시간
@@ -172,6 +176,28 @@ async def _generate_tokens_for_user(
         session=session, db_user=user, refresh_token=refresh_token
     )
 
+    # 신규 유저: MCP 무료 체험 구독 (30일) 자동 생성
+    if is_new_user:
+        try:
+            now = datetime.now(timezone.utc)
+            mcp_subscription = Subscription(
+                user_id=user.id,
+                sub_type=SubscriptionType.MCP,
+                is_active=True,
+                plan=SubscriptionPlan.FREE_TRIAL,
+                started_at=now,
+                expires_at=now + timedelta(days=30),
+            )
+            session.add(mcp_subscription)
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            logger.warning(
+                "Failed to create MCP free trial subscription for user %s",
+                user.id,
+                exc_info=True,
+            )
+
     return {
         "is_new_user": is_new_user,
         "access_token": access_token,
@@ -292,7 +318,7 @@ async def google_mobile_auth_flow(id_token: str, session: AsyncSession) -> dict:
 
 
 async def _verify_apple_id_token(
-    id_token: str, nonce: str | None = None
+    id_token: str, platform: str, nonce: str | None = None
 ) -> dict:
     """
     Apple id_token을 비동기 JWKS로 검증하고 디코딩된 페이로드를 반환합니다.
@@ -304,13 +330,16 @@ async def _verify_apple_id_token(
 
     kid = unverified_header.get("kid")
     signing_key = await _find_jwks_key(kid, _get_apple_jwks, "Apple")
+    audience = settings.APPLE_CLIENT_ID
+    if platform == "app":
+        audience = audience[:-3]
 
     try:
         decoded = jwt.decode(
             id_token,
             signing_key.key,
             algorithms=["RS256"],
-            audience=settings.APPLE_CLIENT_ID,
+            audience=audience,
             issuer="https://appleid.apple.com",
         )
     except jwt.PyJWTError as e:
@@ -387,7 +416,7 @@ async def apple_oauth_flow(
         if not id_token:
             raise OAuthError("No id_token in response from Apple")
 
-        decoded = await _verify_apple_id_token(id_token, nonce=nonce)
+        decoded = await _verify_apple_id_token(id_token, "web", nonce=nonce)
         apple_sub = decoded["sub"]
         email = decoded["email"]
 
@@ -421,7 +450,7 @@ async def apple_mobile_auth_flow(
     모바일용 Apple 로그인.
     네이티브 SDK에서 받은 id_token을 JWKS로 검증하고 JWT 토큰 발급.
     """
-    decoded = await _verify_apple_id_token(id_token)
+    decoded = await _verify_apple_id_token(id_token, "app")
     apple_sub = decoded["sub"]
     email = decoded["email"]
 
