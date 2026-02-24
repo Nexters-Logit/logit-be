@@ -246,7 +246,7 @@ async def _extract_tags_from_question(question_text: str, project_info: str) -> 
         project_info: Combined project information (company, job_position, recruit_notice)
 
     Returns:
-        List of relevant tags (1-5 tags)
+        List of relevant tags (2 tags)
     """
     prompt = f"""다음 문항과 프로젝트 정보를 분석하여 이 문항에 답하기 위해 필요한 역량/경험 태그를 선택해주세요.
 
@@ -259,7 +259,7 @@ async def _extract_tags_from_question(question_text: str, project_info: str) -> 
 {', '.join(AVAILABLE_TAGS)}
 
 요구사항:
-1. 이 문항에 답하기 위해 필요한 역량/경험 태그를 1~5개 선택
+1. 이 문항에 답하기 위해 필요한 역량/경험 태그를 2개 선택
 2. 선택한 태그를 쉼표로 구분하여 반환
 3. 태그 이름만 정확히 반환 (추가 설명 없이)
 4. 예시: "백엔드, DB설계, 트러블슈팅, API연동"
