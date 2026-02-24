@@ -23,7 +23,7 @@ from src.auth.exceptions import (
 from src.auth.schemas import OAuthUserCreate
 from src.config import settings
 from src.security import create_access_token, create_refresh_token
-from src.subscription.models import Subscription, SubscriptionType
+from src.subscription.models import Subscription, SubscriptionPlan, SubscriptionType
 from src.users import service as user_service
 from src.users.models import OAuthProvider, User
 
@@ -184,7 +184,7 @@ async def _generate_tokens_for_user(
                 user_id=user.id,
                 sub_type=SubscriptionType.MCP,
                 is_active=True,
-                plan="free_trial",
+                plan=SubscriptionPlan.FREE_TRIAL,
                 started_at=now,
                 expires_at=now + timedelta(days=30),
             )

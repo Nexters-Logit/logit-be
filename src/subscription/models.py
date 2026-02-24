@@ -4,13 +4,19 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, String, UniqueConstraint
+from sqlalchemy import Column, DateTime, Enum as SAEnum, String, UniqueConstraint, text
 from sqlmodel import Field, SQLModel
 
 
 class SubscriptionType(str, Enum):
     MCP = "mcp"
     LOGIT = "logit"
+
+
+class SubscriptionPlan(str, Enum):
+    FREE_TRIAL = "free_trial"
+    BASIC = "basic"
+    PRO = "pro"
 
 
 class Subscription(SQLModel, table=True):
@@ -22,11 +28,21 @@ class Subscription(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)
     sub_type: SubscriptionType = Field(
-        sa_column=Column("type", String(10), nullable=False),
-        description="구독 타입 (mcp | logit)",
+        sa_column=Column(
+            "type",
+            SAEnum(SubscriptionType, name="subscriptiontype", values_callable=lambda e: [x.value for x in e]),
+            nullable=False,
+        ),
     )
     is_active: bool = Field(default=True)
-    plan: str = Field(default="basic", max_length=50)
+    plan: SubscriptionPlan = Field(
+        default=SubscriptionPlan.BASIC,
+        sa_column=Column(
+            SAEnum(SubscriptionPlan, name="subscriptionplan", values_callable=lambda e: [x.value for x in e]),
+            nullable=False,
+            server_default=text("'basic'"),
+        ),
+    )
 
     started_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
