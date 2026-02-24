@@ -22,6 +22,7 @@ from src.auth.exceptions import (
 from src.auth.schemas import OAuthUserCreate
 from src.config import settings
 from src.security import create_access_token, create_refresh_token
+from src.subscription.models import Subscription, SubscriptionType
 from src.users import service as user_service
 from src.users.models import OAuthProvider, User
 
@@ -171,6 +172,20 @@ async def _generate_tokens_for_user(
     await user_service.update_refresh_token(
         session=session, db_user=user, refresh_token=refresh_token
     )
+
+    # 신규 유저: MCP 무료 체험 구독 (30일) 자동 생성
+    if is_new_user:
+        now = datetime.now(timezone.utc)
+        mcp_subscription = Subscription(
+            user_id=user.id,
+            type=SubscriptionType.MCP,
+            is_active=True,
+            plan="free_trial",
+            started_at=now,
+            expires_at=now + timedelta(days=30),
+        )
+        session.add(mcp_subscription)
+        await session.commit()
 
     return {
         "is_new_user": is_new_user,

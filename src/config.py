@@ -116,6 +116,10 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4o-mini"
     OPENAI_TEMPERATURE: float = 0.7
 
+    # MCP
+    MCP_JWT_SECRET: str | None = None
+    MCP_TOKEN_EXPIRE_DAYS: int = 30
+
     # Chat Rate Limit
     CHAT_DAILY_LIMIT: int = 10  # 일일 채팅 제한 횟수
 

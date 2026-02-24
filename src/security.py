@@ -28,6 +28,13 @@ def create_refresh_token(subject: str | Any) -> str:
     return encoded_jwt
 
 
+def create_mcp_token(subject: str | Any) -> str:
+    """MCP 서버 전용 JWT 토큰 생성. logit-mcp와 MCP_JWT_SECRET을 공유한다."""
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.MCP_TOKEN_EXPIRE_DAYS)
+    to_encode = {"exp": expire, "sub": str(subject), "type": "mcp"}
+    return jwt.encode(to_encode, settings.MCP_JWT_SECRET, algorithm=settings.ALGORITHM)
+
+
 def verify_token(token: str, token_type: str = "access") -> str | None:
     """
     Verify JWT token and return subject (user_id)
