@@ -23,7 +23,7 @@ class Subscription(SQLModel, table=True):
     """구독 정보. 유저당 타입별로 하나."""
 
     __tablename__ = "subscriptions"
-    __table_args__ = (UniqueConstraint("user_id", "sub_type", name="uq_subscription_user_type"),)
+    __table_args__ = (UniqueConstraint("user_id", "type", name="uq_subscription_user_type"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)
