@@ -131,16 +131,13 @@ async def _find_or_create_user(
     if existing_user:
         return existing_user, False
 
-    # 2) 동일 email이 다른 provider로 이미 가입되어 있는지 확인
+    # 2) 동일 email로 이미 가입된 사용자가 있으면 기존 계정으로 로그인
     email_user = await user_service.get_user_by_email(
         session=session, email=email
     )
 
     if email_user:
-        raise OAuthError(
-            f"This email is already registered with {email_user.oauth_provider.value}. "
-            f"Please sign in with {email_user.oauth_provider.value}."
-        )
+        return email_user, False
 
     try:
         new_user = await create_oauth_user(
