@@ -37,13 +37,27 @@ def upgrade() -> None:
     ))
 
     # plan 컬럼을 String -> Enum으로 변경
+    # 1) 기존 server_default 제거 (String 타입 default가 enum 변환을 막으므로)
+    op.alter_column(
+        'subscriptions', 'plan',
+        existing_type=sa.String(50),
+        existing_nullable=False,
+        server_default=None,
+    )
+    # 2) 타입 변환
     op.alter_column(
         'subscriptions', 'plan',
         type_=subscriptionplan_enum,
         existing_type=sa.String(50),
         existing_nullable=False,
-        server_default=sa.text("'basic'"),
         postgresql_using="plan::subscriptionplan",
+    )
+    # 3) 새 default 설정
+    op.alter_column(
+        'subscriptions', 'plan',
+        existing_type=subscriptionplan_enum,
+        existing_nullable=False,
+        server_default=sa.text("'basic'"),
     )
 
     # unique 제약을 (user_id, type) 으로 재생성
