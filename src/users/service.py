@@ -69,9 +69,14 @@ async def get_user_by_oauth(
 
 
 async def delete_user(*, session: AsyncSession, user_id: UUID) -> Optional[User]:
-    """Delete a user."""
+    """Soft delete a user (is_active=False, refresh_token 무효화).
+    oauth_provider_id를 보존해 재가입 시 무료 체험 중복 발급을 차단한다.
+    """
     user = await session.get(User, user_id)
     if user:
-        await session.delete(user)
+        user.is_active = False
+        user.refresh_token = None
+        session.add(user)
         await session.commit()
+        await session.refresh(user)
     return user

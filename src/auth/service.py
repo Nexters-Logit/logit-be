@@ -23,7 +23,6 @@ from src.auth.exceptions import (
 from src.auth.schemas import OAuthUserCreate
 from src.config import settings
 from src.security import create_access_token, create_refresh_token
-from src.subscription.models import Subscription, SubscriptionPlan, SubscriptionType
 from src.users import service as user_service
 from src.users.models import OAuthProvider, User
 
@@ -129,6 +128,8 @@ async def _find_or_create_user(
     )
 
     if existing_user:
+        if not existing_user.is_active:
+            raise OAuthError("탈퇴한 계정입니다. 고객센터에 문의해주세요.")
         return existing_user, False
 
     # 2) 동일 email로 이미 가입된 사용자가 있으면 기존 계정으로 로그인
@@ -137,6 +138,8 @@ async def _find_or_create_user(
     )
 
     if email_user:
+        if not email_user.is_active:
+            raise OAuthError("탈퇴한 계정입니다. 고객센터에 문의해주세요.")
         return email_user, False
 
     try:
@@ -172,28 +175,6 @@ async def _generate_tokens_for_user(
     await user_service.update_refresh_token(
         session=session, db_user=user, refresh_token=refresh_token
     )
-
-    # 신규 유저: MCP 무료 체험 구독 (30일) 자동 생성
-    if is_new_user:
-        try:
-            now = datetime.now(timezone.utc)
-            mcp_subscription = Subscription(
-                user_id=user.id,
-                sub_type=SubscriptionType.MCP,
-                is_active=True,
-                plan=SubscriptionPlan.FREE_TRIAL,
-                started_at=now,
-                expires_at=now + timedelta(days=30),
-            )
-            session.add(mcp_subscription)
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            logger.warning(
-                "Failed to create MCP free trial subscription for user %s",
-                user.id,
-                exc_info=True,
-            )
 
     return {
         "is_new_user": is_new_user,
