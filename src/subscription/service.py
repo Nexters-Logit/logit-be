@@ -16,7 +16,7 @@ async def get_active_subscription(
     now = datetime.now(timezone.utc)
     stmt = select(Subscription).where(
         Subscription.user_id == user_id,
-        Subscription.type == type,
+        Subscription.sub_type == type,
         Subscription.is_active == True,  # noqa: E712
     )
     result = await session.execute(stmt)
