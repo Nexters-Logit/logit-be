@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, UniqueConstraint
+from sqlalchemy import Column, DateTime, String, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -17,11 +17,14 @@ class Subscription(SQLModel, table=True):
     """구독 정보. 유저당 타입별로 하나."""
 
     __tablename__ = "subscriptions"
-    __table_args__ = (UniqueConstraint("user_id", "type", name="uq_subscription_user_type"),)
+    __table_args__ = (UniqueConstraint("user_id", "sub_type", name="uq_subscription_user_type"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)
-    type: SubscriptionType = Field(description="구독 타입 (mcp | logit)")
+    sub_type: SubscriptionType = Field(
+        sa_column=Column("type", String(10), nullable=False),
+        description="구독 타입 (mcp | logit)",
+    )
     is_active: bool = Field(default=True)
     plan: str = Field(default="basic", max_length=50)
 

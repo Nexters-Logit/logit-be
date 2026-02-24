@@ -36,14 +36,17 @@ async def get_my_subscriptions(
     subs = result.scalars().all()
 
     now = datetime.now(timezone.utc)
+    expired = []
     for sub in subs:
         if sub.is_active and sub.expires_at is not None and sub.expires_at < now:
             sub.is_active = False
             session.add(sub)
+            expired.append(sub)
 
-    await session.commit()
-    for sub in subs:
-        await session.refresh(sub)
+    if expired:
+        await session.commit()
+        for sub in expired:
+            await session.refresh(sub)
 
     return subs
 
@@ -70,7 +73,7 @@ async def get_my_subscription_by_type(
     result = await session.execute(
         select(Subscription).where(
             Subscription.user_id == current_user.id,
-            Subscription.type == type,
+            Subscription.sub_type == type,
         )
     )
     sub = result.scalar_one_or_none()
