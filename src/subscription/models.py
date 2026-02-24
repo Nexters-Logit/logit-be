@@ -44,6 +44,11 @@ class Subscription(SQLModel, table=True):
         ),
     )
 
+    token: str | None = Field(
+        default=None,
+        sa_column=Column(String, nullable=True),
+    )
+
     started_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(DateTime(timezone=True), nullable=False),
