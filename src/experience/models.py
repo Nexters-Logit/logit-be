@@ -1,7 +1,7 @@
 """Experience domain models for Qdrant storage."""
 
 import datetime as dt
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
@@ -90,8 +90,8 @@ class Experience(ExperienceBase):
 
     id: str = Field(default_factory=lambda: str(uuid4()), description="경험 ID (UUID)")
     user_id: str = Field(..., description="소유자 ID (UUID)")
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="생성 시간 (UTC)")
-    updated_at: datetime = Field(default_factory=datetime.utcnow, description="수정 시간 (UTC)")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="생성 시간 (UTC)")
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="수정 시간 (UTC)")
 
     class Config:
         json_schema_extra = {

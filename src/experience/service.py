@@ -640,9 +640,14 @@ def list_experiences(
         )
         total = count_result.count
 
-        # Qdrant doesn't support offset with order_by, so we fetch (limit + offset) items
-        # and slice in Python. For small user datasets this is acceptable.
-        fetch_limit = limit + offset
+        # Early return if offset is beyond total
+        if offset >= total:
+            return [], total
+
+        # Optimize fetch limit: only fetch what's needed
+        # Qdrant doesn't support offset with order_by, so we fetch up to (limit + offset) items
+        # and slice in Python, but cap at total to avoid over-fetching
+        fetch_limit = min(limit + offset, total)
 
         # Scroll to get matching points sorted by created_at (newest first)
         # Note: Cannot use offset parameter with order_by
