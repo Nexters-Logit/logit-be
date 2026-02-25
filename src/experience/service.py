@@ -633,12 +633,23 @@ def list_experiences(
     )
 
     try:
+        # Get total count first
+        count_result = client.count(
+            collection_name=settings.QDRANT_COLLECTION_NAME,
+            count_filter=user_filter,
+        )
+        total = count_result.count
+
+        # Qdrant doesn't support offset with order_by, so we fetch (limit + offset) items
+        # and slice in Python. For small user datasets this is acceptable.
+        fetch_limit = limit + offset
+
         # Scroll to get matching points sorted by created_at (newest first)
+        # Note: Cannot use offset parameter with order_by
         scroll_result = client.scroll(
             collection_name=settings.QDRANT_COLLECTION_NAME,
             scroll_filter=user_filter,
-            limit=limit,
-            offset=offset,
+            limit=fetch_limit,
             with_payload=True,
             with_vectors=False,
             order_by=OrderBy(
@@ -650,14 +661,10 @@ def list_experiences(
         points, _ = scroll_result  # Unpack, ignore next_offset
 
         # Convert to Experience objects (already sorted by Qdrant)
-        experiences = [Experience(**point.payload) for point in points]
+        all_experiences = [Experience(**point.payload) for point in points]
 
-        # Get total count using count API (more efficient than scrolling)
-        count_result = client.count(
-            collection_name=settings.QDRANT_COLLECTION_NAME,
-            count_filter=user_filter,
-        )
-        total = count_result.count
+        # Apply offset and limit in Python
+        experiences = all_experiences[offset:offset + limit]
 
         return experiences, total
     except UnexpectedResponse as e:
