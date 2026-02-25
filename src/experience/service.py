@@ -3,13 +3,13 @@
 import asyncio
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
 from openai import AsyncOpenAI, APIError, APIConnectionError, RateLimitError, AuthenticationError
 from qdrant_client import QdrantClient
-from qdrant_client.models import Filter, FieldCondition, MatchValue, PointStruct
+from qdrant_client.models import Direction, Filter, FieldCondition, MatchValue, OrderBy, PointStruct
 from qdrant_client.http.exceptions import UnexpectedResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -485,7 +485,7 @@ async def create_experience(
     Raises:
         HTTPException: If OpenAI API fails
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     exp_id = str(uuid4())
 
     # Create temporary Experience object for AI generation
@@ -633,7 +633,7 @@ def list_experiences(
     )
 
     try:
-        # Scroll to get all matching points for sorting
+        # Scroll to get matching points sorted by created_at (newest first)
         scroll_result = client.scroll(
             collection_name=settings.QDRANT_COLLECTION_NAME,
             scroll_filter=user_filter,
@@ -641,13 +641,16 @@ def list_experiences(
             offset=offset,
             with_payload=True,
             with_vectors=False,
+            order_by=OrderBy(
+                key="created_at",
+                direction=Direction.DESC,
+            ),
         )
 
         points, _ = scroll_result  # Unpack, ignore next_offset
 
-        # Convert to Experience objects and sort by created_at descending (newest first)
+        # Convert to Experience objects (already sorted by Qdrant)
         experiences = [Experience(**point.payload) for point in points]
-        experiences.sort(key=lambda e: e.created_at, reverse=True)
 
         # Get total count using count API (more efficient than scrolling)
         count_result = client.count(
@@ -722,7 +725,7 @@ async def update_experience(
             )
 
     updated_experience = existing.model_copy(update=update_data)
-    updated_experience.updated_at = datetime.utcnow()
+    updated_experience.updated_at = datetime.now(timezone.utc)
 
     # Validate date range after applying updates (catches partial updates)
     if updated_experience.end_date and updated_experience.start_date > updated_experience.end_date:

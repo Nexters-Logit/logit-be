@@ -1,7 +1,7 @@
 from collections.abc import AsyncGenerator
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams
+from qdrant_client.models import Distance, PayloadSchemaType, VectorParams
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -69,6 +69,18 @@ def init_qdrant_collection() -> None:
         print(f"Created Qdrant collection: {settings.QDRANT_COLLECTION_NAME}")
     else:
         print(f"Qdrant collection already exists: {settings.QDRANT_COLLECTION_NAME}")
+
+    # Create payload index on created_at field for sorting
+    try:
+        client.create_payload_index(
+            collection_name=settings.QDRANT_COLLECTION_NAME,
+            field_name="created_at",
+            field_schema=PayloadSchemaType.DATETIME,
+        )
+        print(f"Created payload index on created_at field")
+    except Exception as e:
+        # Index might already exist, which is fine
+        print(f"Payload index on created_at may already exist: {e}")
 
 
 
