@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth import constants
-from src.auth.utils import get_oauth_redirect_uri
+from src.auth.utils import generate_random_nickname, get_oauth_redirect_uri
 from src.auth.exceptions import (
     InvalidTokenError,
     OAuthError,
@@ -123,23 +123,17 @@ async def _find_or_create_user(
     Returns (user, is_new_user)
     """
     # 1) 동일 provider + provider_id로 기존 사용자 조회
-    existing_user = await user_service.get_user_by_oauth(
-        session=session, provider=provider, provider_id=provider_id
-    )
-
-    if existing_user:
-        if not existing_user.is_active:
-            raise OAuthError("탈퇴한 계정입니다. 고객센터에 문의해주세요.")
-        return existing_user, False
-
-    # 2) 동일 email로 이미 가입된 사용자가 있으면 기존 계정으로 로그인
+    # 동일 email로 이미 가입된 사용자가 있으면 기존 계정으로 로그인
     email_user = await user_service.get_user_by_email(
         session=session, email=email
     )
 
     if email_user:
         if not email_user.is_active:
-            raise OAuthError("탈퇴한 계정입니다. 고객센터에 문의해주세요.")
+            email_user.is_active = True
+            session.add(email_user)
+            await session.commit()
+            await session.refresh(email_user)
         return email_user, False
 
     try:
@@ -422,7 +416,7 @@ async def apple_oauth_flow(
         provider=OAuthProvider.apple,
         provider_id=apple_sub,
         email=email,
-        name=full_name or None,
+        name=full_name or generate_random_nickname(),
         picture=None,
     )
 
@@ -445,7 +439,7 @@ async def apple_mobile_auth_flow(
         provider=OAuthProvider.apple,
         provider_id=apple_sub,
         email=email,
-        name=full_name,
+        name=full_name or generate_random_nickname(),
         picture=None,
     )
 

@@ -1,7 +1,7 @@
 """Experience domain models for Qdrant storage."""
 
 import datetime as dt
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
@@ -47,11 +47,11 @@ class ExperienceFormatType(str, Enum):
 AVAILABLE_CATEGORIES = [c.value for c in ExperienceCategory]
 
 AVAILABLE_TAGS = [
-    "문서작성", "일정관리", "요구사항정의", "프로세스개선", "데이터분석", "커뮤니케이션", "리서치", "문제해결", "협업도구(Notion/Jira/Slack)",
+    "문서작성", "일정관리", "요구사항정의", "프로세스개선", "데이터분석", "커뮤니케이션", "리서치", "문제해결", "협업도구",
     "프론트엔드", "백엔드", "앱개발", "인프라/클라우드", "DB설계", "트러블슈팅", "API연동", "AI/LLM", "코드리뷰", "시스템아키텍처",
-    "UX/UI", "브랜딩", "그래픽디자인", "프로토타이핑", "디자인시스템", "영상편집", "모션그래픽", "3D모델링", "사용자테스트(UT)",
-    "서비스기획", "PM/PO", "사업개발", "전략기획", "시장분석", "지표설정(KPI/OKR)", "밴치마킹", "수익모델설계",
-    "콘텐츠제작", "퍼포먼스마케팅", "SNS운영", "광고집행", "검색최적화(SEO)", "CRM", "B2B/B2C영업", "제안서작성",
+    "UX/UI", "브랜딩", "그래픽디자인", "프로토타이핑", "디자인시스템", "영상편집", "모션그래픽", "3D모델링", "사용자테스트",
+    "서비스기획", "PM/PO", "사업개발", "전략기획", "시장분석", "지표설정", "밴치마킹", "수익모델설계",
+    "콘텐츠제작", "퍼포먼스마케팅", "SNS운영", "광고집행", "검색최적화", "CRM", "B2B/B2C영업", "제안서작성",
     "고객응대(CS/CX)", "서비스운영", "QA/테스트", "인사/채용", "조직문화", "재무/회계", "이벤트기획"
 ]
 
@@ -90,8 +90,8 @@ class Experience(ExperienceBase):
 
     id: str = Field(default_factory=lambda: str(uuid4()), description="경험 ID (UUID)")
     user_id: str = Field(..., description="소유자 ID (UUID)")
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="생성 시간 (UTC)")
-    updated_at: datetime = Field(default_factory=datetime.utcnow, description="수정 시간 (UTC)")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="생성 시간 (UTC)")
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="수정 시간 (UTC)")
 
     class Config:
         json_schema_extra = {

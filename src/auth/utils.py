@@ -1,6 +1,14 @@
 """Authentication utility functions."""
 
+from coolname import generate as coolname_generate
+
 from src.config import settings
+
+
+def generate_random_nickname() -> str:
+    """형용사 + 동물 조합의 랜덤 닉네임 생성 (예: Lucky Fox, Brave Eagle)."""
+    words = coolname_generate(2)  # ['lucky', 'fox']
+    return " ".join(word.capitalize() for word in words)
 
 
 def get_oauth_redirect_uri(provider: str) -> str:

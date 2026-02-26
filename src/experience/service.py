@@ -3,13 +3,13 @@
 import asyncio
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
 from openai import AsyncOpenAI, APIError, APIConnectionError, RateLimitError, AuthenticationError
 from qdrant_client import QdrantClient
-from qdrant_client.models import Filter, FieldCondition, MatchValue, PointStruct
+from qdrant_client.models import Direction, Filter, FieldCondition, MatchValue, OrderBy, PointStruct
 from qdrant_client.http.exceptions import UnexpectedResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -246,7 +246,7 @@ async def _extract_tags_from_question(question_text: str, project_info: str) -> 
         project_info: Combined project information (company, job_position, recruit_notice)
 
     Returns:
-        List of relevant tags (1-5 tags)
+        List of relevant tags (2 tags)
     """
     prompt = f"""다음 문항과 프로젝트 정보를 분석하여 이 문항에 답하기 위해 필요한 역량/경험 태그를 선택해주세요.
 
@@ -259,7 +259,7 @@ async def _extract_tags_from_question(question_text: str, project_info: str) -> 
 {', '.join(AVAILABLE_TAGS)}
 
 요구사항:
-1. 이 문항에 답하기 위해 필요한 역량/경험 태그를 1~5개 선택
+1. 이 문항에 답하기 위해 필요한 역량/경험 태그를 2개 선택
 2. 선택한 태그를 쉼표로 구분하여 반환
 3. 태그 이름만 정확히 반환 (추가 설명 없이)
 4. 예시: "백엔드, DB설계, 트러블슈팅, API연동"
@@ -485,7 +485,7 @@ async def create_experience(
     Raises:
         HTTPException: If OpenAI API fails
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     exp_id = str(uuid4())
 
     # Create temporary Experience object for AI generation
@@ -633,27 +633,43 @@ def list_experiences(
     )
 
     try:
-        # Scroll to get matching points for current page
-        scroll_result = client.scroll(
-            collection_name=settings.QDRANT_COLLECTION_NAME,
-            scroll_filter=user_filter,
-            limit=limit,
-            offset=offset,
-            with_payload=True,
-            with_vectors=False,
-        )
-
-        points, _ = scroll_result  # Unpack, ignore next_offset
-
-        # Convert to Experience objects
-        experiences = [Experience(**point.payload) for point in points]
-
-        # Get total count using count API (more efficient than scrolling)
+        # Get total count first
         count_result = client.count(
             collection_name=settings.QDRANT_COLLECTION_NAME,
             count_filter=user_filter,
         )
         total = count_result.count
+
+        # Early return if offset is beyond total
+        if offset >= total:
+            return [], total
+
+        # Optimize fetch limit: only fetch what's needed
+        # Qdrant doesn't support offset with order_by, so we fetch up to (limit + offset) items
+        # and slice in Python, but cap at total to avoid over-fetching
+        fetch_limit = min(limit + offset, total)
+
+        # Scroll to get matching points sorted by created_at (newest first)
+        # Note: Cannot use offset parameter with order_by
+        scroll_result = client.scroll(
+            collection_name=settings.QDRANT_COLLECTION_NAME,
+            scroll_filter=user_filter,
+            limit=fetch_limit,
+            with_payload=True,
+            with_vectors=False,
+            order_by=OrderBy(
+                key="created_at",
+                direction=Direction.DESC,
+            ),
+        )
+
+        points, _ = scroll_result  # Unpack, ignore next_offset
+
+        # Convert to Experience objects (already sorted by Qdrant)
+        all_experiences = [Experience(**point.payload) for point in points]
+
+        # Apply offset and limit in Python
+        experiences = all_experiences[offset:offset + limit]
 
         return experiences, total
     except UnexpectedResponse as e:
@@ -721,7 +737,7 @@ async def update_experience(
             )
 
     updated_experience = existing.model_copy(update=update_data)
-    updated_experience.updated_at = datetime.utcnow()
+    updated_experience.updated_at = datetime.now(timezone.utc)
 
     # Validate date range after applying updates (catches partial updates)
     if updated_experience.end_date and updated_experience.start_date > updated_experience.end_date:

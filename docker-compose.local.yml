@@ -24,6 +24,8 @@ services:
       # Qdrant
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
+      # MCP
+      - MCP_JWT_SECRET=${MCP_JWT_SECRET}
       # Environment (local로 설정)
       - ENVIRONMENT=local
     depends_on:

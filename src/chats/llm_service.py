@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import re
 from enum import Enum
 from typing import AsyncGenerator
 from uuid import UUID
@@ -16,11 +15,7 @@ from src.experience.models import Experience, ExperienceFormatType
 from src.experience.service import get_experience
 from .prompts import (
     CLASSIFICATION_PROMPT,
-    STORYLINE_PROMPT,
     GENERATION_PROMPT,
-    HALLUCINATION_CHECK_PROMPT,
-    REVISION_PROMPT,
-    LENGTH_ADJUSTMENT_PROMPT,
     CONVERSATION_SYSTEM_PROMPT,
 )
 from .chat_history import PostgresChatMessageHistory
@@ -53,16 +48,6 @@ class RequestClassification(BaseModel):
         description="문항 유형 분류"
     )
 
-
-class StorylineExperience(BaseModel):
-    title: str = Field(description="경험 제목")
-    role: str = Field(description="주 경험 / 보조 경험")
-    key_facts: list[str] = Field(description="이 경험에서 사용할 핵심 사실 (1~3개)")
-
-
-class Storyline(BaseModel):
-    core_message: str = Field(description="자기소개서의 핵심 메시지 (한 문장)")
-    experiences: list[StorylineExperience] = Field(description="경험별 역할 및 사용 계획")
 
 
 # ============================================================
@@ -169,41 +154,6 @@ def get_experiences_by_ids(
     return experiences
 
 
-def _check_listing_pattern(draft: str) -> bool:
-    """나열식 패턴 감지 (LLM 없이 정규식으로)"""
-    patterns = [
-        r'첫째[,\s]',
-        r'둘째[,\s]',
-        r'셋째[,\s]',
-        r'첫 번째',
-        r'두 번째',
-        r'세 번째',
-        r'\n[①②③④⑤]',
-        r'\n\s*\d+\.',
-    ]
-    return any(re.search(p, draft) for p in patterns)
-
-
-async def _check_hallucination(
-    draft: str,
-    experiences: list[Experience],
-    provider: LLMProvider,
-) -> bool:
-    """할루시네이션 감지 (yes/no LLM, structured output 없이 ~2-3s)"""
-    if not experiences:
-        return False
-    try:
-        experiences_text = _format_experiences_plain(experiences)
-        response = await provider.classification_llm.ainvoke(
-            HALLUCINATION_CHECK_PROMPT.format(
-                experiences=experiences_text,
-                draft=draft,
-            )
-        )
-        return response.content.strip().lower().startswith("yes")
-    except Exception:
-        logger.warning("Hallucination check failed, skipping", exc_info=True)
-        return False
 
 
 # ============================================================
@@ -225,39 +175,16 @@ async def classify_request(
     )
 
 
-async def design_storyline(
-    question: str,
-    max_length: int | None,
-    company: str,
-    experiences: list[Experience],
-    provider: LLMProvider,
-) -> Storyline:
-    """2단계: 적합성 점수 기반 역할 분배 + 스토리라인 설계"""
-    experiences_text = _format_experiences_with_roles(experiences)
-    structured_llm = provider.classification_llm.with_structured_output(Storyline)
-    return await structured_llm.ainvoke(
-        STORYLINE_PROMPT.format(
-            question=question,
-            max_length=max_length or "제한 없음",
-            company=company,
-            experiences=experiences_text,
-        )
-    )
-
-
 async def generate_draft_text(
-    storyline: Storyline,
+    experiences: list[Experience],
     question: str,
     max_length: int | None,
     company: str,
     recruit_notice: str | None,
     provider: LLMProvider,
 ) -> str:
-    """3단계: 스토리라인 기반 초안 생성 (비스트리밍)"""
-    experience_plan = "\n".join(
-        f"- [{exp.role}] {exp.title}: {', '.join(exp.key_facts)}"
-        for exp in storyline.experiences
-    )
+    """2단계: 경험 기반 초안 생성 (인라인 스토리라인 설계 포함)"""
+    experiences_text = _format_experiences_with_roles(experiences)
 
     prompt = GENERATION_PROMPT.format(
         company=company,
@@ -265,66 +192,14 @@ async def generate_draft_text(
         question=question,
         max_length=max_length or "제한 없음",
         min_length=int(max_length * 0.85) if max_length else 0,
-        core_message=storyline.core_message,
-        experience_plan=experience_plan,
+        experiences=experiences_text,
     )
 
-    response = await provider.streaming_llm.ainvoke(prompt)
+    response = await provider.writing_llm.ainvoke(prompt)
     return response.content
 
 
 
-async def revise_draft_text(
-    draft: str,
-    feedback: str,
-    experiences: list[Experience],
-    max_length: int | None,
-    provider: LLMProvider,
-) -> str:
-    """4-1단계: 검수 피드백 기반 수정 (조건부)"""
-    experiences_text = _format_experiences_plain(experiences)
-    response = await provider.streaming_llm.ainvoke(
-        REVISION_PROMPT.format(
-            draft=draft,
-            feedback=feedback,
-            experiences=experiences_text,
-            min_length=int(max_length * 0.9) if max_length else 0,
-            max_length=max_length or "제한 없음",
-        )
-    )
-    return response.content
-
-
-async def adjust_length_if_needed(
-    draft: str,
-    max_length: int,
-    provider: LLMProvider,
-) -> str:
-    """4-2단계: 글자수 보정 (조건부, 최대 1회 / 허용 범위 ±15%)"""
-    min_length = int(max_length * 0.85)
-
-    for _ in range(1):
-        current = len(draft)
-        if min_length <= current <= max_length:
-            break
-
-        if current > max_length:
-            direction = f"{current - max_length}자 초과"
-        else:
-            direction = f"{min_length - current}자 부족"
-
-        response = await provider.streaming_llm.ainvoke(
-            LENGTH_ADJUSTMENT_PROMPT.format(
-                current_length=current,
-                draft=draft,
-                min_length=min_length,
-                max_length=max_length,
-                direction=direction,
-            )
-        )
-        draft = response.content
-
-    return draft
 
 
 # ============================================================
@@ -432,56 +307,15 @@ async def generate_ai_response_stream(
             else:
                 # === 자기소개서 초안 생성: 멀티 스텝 파이프라인 ===
 
-                # 2단계: 스토리라인 설계
-                storyline = await design_storyline(
-                    question=question_content,
-                    max_length=max_length,
-                    company=company,
-                    experiences=experiences,
-                    provider=provider,
-                )
-
-                # 3단계: 초안 생성
+                # 2단계: 초안 생성 (인라인 스토리라인 설계 포함)
                 draft = await generate_draft_text(
-                    storyline=storyline,
+                    experiences=experiences,
                     question=question_content,
                     max_length=max_length,
                     company=company,
                     recruit_notice=recruit_notice,
                     provider=provider,
                 )
-
-                # 4단계: 검수 (정규식 + yes/no LLM 병렬)
-                async def _listing_check() -> bool:
-                    return _check_listing_pattern(draft)
-
-                has_listing, has_hallucination = await asyncio.gather(
-                    _listing_check(),
-                    _check_hallucination(draft, experiences, provider),
-                )
-
-                feedbacks: list[str] = []
-                if has_listing:
-                    feedbacks.append(
-                        "경험들이 나열식으로 서술되어 있습니다. '첫째~둘째~' 또는 단락별 나열 구조 대신 하나의 자연스러운 이야기 흐름으로 재작성하세요."
-                    )
-                if has_hallucination:
-                    feedbacks.append(
-                        "경험 정보에 없는 수치, 성과, 역할, 활동이 포함되어 있습니다. 원본 경험 정보에 있는 사실만 사용하세요."
-                    )
-
-                if feedbacks:
-                    draft = await revise_draft_text(
-                        draft=draft,
-                        feedback="\n".join(feedbacks),
-                        experiences=experiences,
-                        max_length=max_length,
-                        provider=provider,
-                    )
-
-                # 4-2단계: 글자수 보정
-                if max_length:
-                    draft = await adjust_length_if_needed(draft, max_length, provider)
 
                 # 청크 단위 스트리밍 (5자씩, 100ms 간격)
                 chunk_size = 5
