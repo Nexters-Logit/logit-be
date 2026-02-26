@@ -16,7 +16,6 @@ from src.experience.service import get_experience
 from .prompts import (
     CLASSIFICATION_PROMPT,
     GENERATION_PROMPT,
-    LENGTH_ADJUSTMENT_PROMPT,
     CONVERSATION_SYSTEM_PROMPT,
 )
 from .chat_history import PostgresChatMessageHistory
@@ -202,37 +201,6 @@ async def generate_draft_text(
 
 
 
-async def adjust_length_if_needed(
-    draft: str,
-    max_length: int,
-    provider: LLMProvider,
-) -> str:
-    """4-2단계: 글자수 보정 (조건부, 최대 1회 / 허용 범위 ±15%)"""
-    min_length = int(max_length * 0.85)
-
-    for _ in range(1):
-        current = len(draft)
-        if min_length <= current <= max_length:
-            break
-
-        if current > max_length:
-            direction = f"{current - max_length}자 초과"
-        else:
-            direction = f"{min_length - current}자 부족"
-
-        response = await provider.writing_llm.ainvoke(
-            LENGTH_ADJUSTMENT_PROMPT.format(
-                current_length=current,
-                draft=draft,
-                min_length=min_length,
-                max_length=max_length,
-                direction=direction,
-            )
-        )
-        draft = response.content
-
-    return draft
-
 
 # ============================================================
 # Main Streaming Function
@@ -348,10 +316,6 @@ async def generate_ai_response_stream(
                     recruit_notice=recruit_notice,
                     provider=provider,
                 )
-
-                # 3단계: 글자수 보정
-                if max_length:
-                    draft = await adjust_length_if_needed(draft, max_length, provider)
 
                 # 청크 단위 스트리밍 (5자씩, 100ms 간격)
                 chunk_size = 5
