@@ -104,6 +104,8 @@ class Settings(BaseSettings):
     # OAuth - Google
     GOOGLE_CLIENT_ID: str | None = None
     GOOGLE_CLIENT_SECRET: str | None = None
+    GOOGLE_IOS_CLIENT_ID: str | None = None
+    GOOGLE_ANDROID_CLIENT_ID: str | None = None
 
     # OAuth - Apple
     APPLE_CLIENT_ID: str | None = None
@@ -119,6 +121,10 @@ class Settings(BaseSettings):
     # Anthropic (for writing tasks)
     ANTHROPIC_API_KEY: str | None = None
     ANTHROPIC_MODEL: str = "claude-sonnet-4-6"
+
+    # MCP
+    MCP_JWT_SECRET: str
+    MCP_TOKEN_EXPIRE_DAYS: int = 30
 
     # Chat Rate Limit
     CHAT_DAILY_LIMIT: int = 10  # 일일 채팅 제한 횟수

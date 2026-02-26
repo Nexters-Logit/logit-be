@@ -1,6 +1,7 @@
 """Authentication service layer - OAuth and JWT logic."""
 
 import json
+import logging
 import time
 from collections.abc import Callable, Coroutine
 from datetime import datetime, timedelta, timezone
@@ -13,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth import constants
-from src.auth.utils import get_oauth_redirect_uri
+from src.auth.utils import generate_random_nickname, get_oauth_redirect_uri
 from src.auth.exceptions import (
     InvalidTokenError,
     OAuthError,
@@ -24,6 +25,8 @@ from src.config import settings
 from src.security import create_access_token, create_refresh_token
 from src.users import service as user_service
 from src.users.models import OAuthProvider, User
+
+logger = logging.getLogger(__name__)
 
 # JWKS 비동기 캐시 (Google / Apple 공용 패턴)
 _JWKS_CACHE_TTL = 3600  # 1시간
@@ -120,23 +123,18 @@ async def _find_or_create_user(
     Returns (user, is_new_user)
     """
     # 1) 동일 provider + provider_id로 기존 사용자 조회
-    existing_user = await user_service.get_user_by_oauth(
-        session=session, provider=provider, provider_id=provider_id
-    )
-
-    if existing_user:
-        return existing_user, False
-
-    # 2) 동일 email이 다른 provider로 이미 가입되어 있는지 확인
+    # 동일 email로 이미 가입된 사용자가 있으면 기존 계정으로 로그인
     email_user = await user_service.get_user_by_email(
         session=session, email=email
     )
 
     if email_user:
-        raise OAuthError(
-            f"This email is already registered with {email_user.oauth_provider.value}. "
-            f"Please sign in with {email_user.oauth_provider.value}."
-        )
+        if not email_user.is_active:
+            email_user.is_active = True
+            session.add(email_user)
+            await session.commit()
+            await session.refresh(email_user)
+        return email_user, False
 
     try:
         new_user = await create_oauth_user(
@@ -249,12 +247,20 @@ async def _verify_google_id_token(id_token: str) -> dict:
     kid = unverified_header.get("kid")
     signing_key = await _find_jwks_key(kid, _get_google_jwks, "Google")
 
+    allowed_audiences = [
+        aud for aud in [
+            settings.GOOGLE_CLIENT_ID,
+            settings.GOOGLE_IOS_CLIENT_ID,
+            settings.GOOGLE_ANDROID_CLIENT_ID,
+        ] if aud
+    ]
+
     try:
         decoded = jwt.decode(
             id_token,
             signing_key.key,
             algorithms=["RS256"],
-            audience=settings.GOOGLE_CLIENT_ID,
+            audience=allowed_audiences,
             issuer=["https://accounts.google.com", "accounts.google.com"],
         )
     except jwt.PyJWTError as e:
@@ -292,7 +298,7 @@ async def google_mobile_auth_flow(id_token: str, session: AsyncSession) -> dict:
 
 
 async def _verify_apple_id_token(
-    id_token: str, nonce: str | None = None
+    id_token: str, nonce: str | None = None,
 ) -> dict:
     """
     Apple id_token을 비동기 JWKS로 검증하고 디코딩된 페이로드를 반환합니다.
@@ -304,13 +310,16 @@ async def _verify_apple_id_token(
 
     kid = unverified_header.get("kid")
     signing_key = await _find_jwks_key(kid, _get_apple_jwks, "Apple")
+    allowed_audiences = [settings.APPLE_CLIENT_ID]
+    if settings.APPLE_CLIENT_ID:
+        allowed_audiences.append(settings.APPLE_CLIENT_ID[:-3])  # bundle id (앱용)
 
     try:
         decoded = jwt.decode(
             id_token,
             signing_key.key,
             algorithms=["RS256"],
-            audience=settings.APPLE_CLIENT_ID,
+            audience=allowed_audiences,
             issuer="https://appleid.apple.com",
         )
     except jwt.PyJWTError as e:
@@ -407,7 +416,7 @@ async def apple_oauth_flow(
         provider=OAuthProvider.apple,
         provider_id=apple_sub,
         email=email,
-        name=full_name or None,
+        name=full_name or generate_random_nickname(),
         picture=None,
     )
 
@@ -430,7 +439,7 @@ async def apple_mobile_auth_flow(
         provider=OAuthProvider.apple,
         provider_id=apple_sub,
         email=email,
-        name=full_name,
+        name=full_name or generate_random_nickname(),
         picture=None,
     )
 
