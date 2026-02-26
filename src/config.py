@@ -116,6 +116,10 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4o-mini"
     OPENAI_TEMPERATURE: float = 0.7
 
+    # Anthropic (for writing tasks)
+    ANTHROPIC_API_KEY: str | None = None
+    ANTHROPIC_MODEL: str = "claude-sonnet-4-6"
+
     # Chat Rate Limit
     CHAT_DAILY_LIMIT: int = 10  # 일일 채팅 제한 횟수
 
