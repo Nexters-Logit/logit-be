@@ -118,6 +118,10 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4o-mini"
     OPENAI_TEMPERATURE: float = 0.7
 
+    # Anthropic (for writing tasks)
+    ANTHROPIC_API_KEY: str | None = None
+    ANTHROPIC_MODEL: str = "claude-sonnet-4-6"
+
     # MCP
     MCP_JWT_SECRET: str
     MCP_TOKEN_EXPIRE_DAYS: int = 30

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Annotated
 from fastapi import Depends
 
 if TYPE_CHECKING:
+    from langchain_anthropic import ChatAnthropic
     from langchain_openai import ChatOpenAI
     from .rate_limit import ChatRateLimiter
 
@@ -20,6 +21,7 @@ class LLMProvider:
     def __init__(self):
         self._streaming_llm: ChatOpenAI | None = None
         self._classification_llm: ChatOpenAI | None = None
+        self._writing_llm: ChatAnthropic | None = None
 
     @property
     def streaming_llm(self) -> ChatOpenAI:
@@ -48,6 +50,19 @@ class LLMProvider:
                 temperature=0,
             )
         return self._classification_llm
+
+    @property
+    def writing_llm(self) -> ChatAnthropic:
+        """글쓰기용 LLM - Claude (초안 생성, 수정, 길이 보정)"""
+        from langchain_anthropic import ChatAnthropic
+
+        if self._writing_llm is None:
+            self._writing_llm = ChatAnthropic(
+                model=settings.ANTHROPIC_MODEL,
+                api_key=settings.ANTHROPIC_API_KEY,
+                temperature=settings.OPENAI_TEMPERATURE,
+            )
+        return self._writing_llm
 
 
 @lru_cache
