@@ -33,6 +33,13 @@ class ExperienceCreate(BaseModel):
     # Free format field (required when format_type=FREE)
     content: str | None = Field(None, min_length=1, max_length=10000, description="자유 형식 내용")
 
+    @field_validator("situation", "task", "action", "result", "problem", "solution", "insight", "content", mode="before")
+    @classmethod
+    def empty_str_to_none(cls, v: object) -> object:
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
+
     @field_validator("end_date", mode="before")
     @classmethod
     def validate_end_date(cls, v: object) -> object:
@@ -45,7 +52,7 @@ class ExperienceCreate(BaseModel):
                 raise ValueError("날짜 형식은 YYYY-MM-DD이어야 합니다.")
             return v.strip()
         return v
-      
+
     @model_validator(mode="after")
     def validate_format_fields(self):
         # Validate date range
@@ -115,6 +122,13 @@ class ExperienceUpdate(BaseModel):
 
     # Free format field
     content: str | None = Field(None, min_length=1, max_length=10000, description="자유 형식 내용")
+
+    @field_validator("situation", "task", "action", "result", "problem", "solution", "insight", "content", mode="before")
+    @classmethod
+    def empty_str_to_none(cls, v: object) -> object:
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
 
     @field_validator("end_date", mode="before")
     @classmethod
