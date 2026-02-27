@@ -713,28 +713,63 @@ async def update_experience(
     # Apply updates
     update_data = experience_update.model_dump(exclude_unset=True)
 
-    # Validate format-specific fields based on existing format_type
-    if existing.format_type == ExperienceFormatType.STAR:
+    # Determine effective format type (new if provided, existing otherwise)
+    new_format_type = update_data.get("format_type")
+    effective_format_type = new_format_type if new_format_type else existing.format_type
+
+    # Validate format-specific fields based on effective format_type
+    if effective_format_type == ExperienceFormatType.STAR:
         invalid_fields = {"problem", "solution", "insight", "content"} & update_data.keys()
         if invalid_fields:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"STAR format does not support fields: {', '.join(invalid_fields)}. Only situation, task, action, result are allowed.",
             )
-    elif existing.format_type == ExperienceFormatType.PSI:
+    elif effective_format_type == ExperienceFormatType.PSI:
         invalid_fields = {"situation", "task", "action", "result", "content"} & update_data.keys()
         if invalid_fields:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"PSI format does not support fields: {', '.join(invalid_fields)}. Only problem, solution, insight are allowed.",
             )
-    elif existing.format_type == ExperienceFormatType.FREE:
+    elif effective_format_type == ExperienceFormatType.FREE:
         invalid_fields = {"situation", "task", "action", "result", "problem", "solution", "insight"} & update_data.keys()
         if invalid_fields:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"FREE format does not support fields: {', '.join(invalid_fields)}. Only content is allowed.",
             )
+
+    # If format_type is changing, validate required fields and clear old format's fields
+    if new_format_type and new_format_type != existing.format_type:
+        if effective_format_type == ExperienceFormatType.PSI:
+            if not all(update_data.get(f) for f in ["problem", "solution", "insight"]):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="PSI 형식으로 변경하려면 problem, solution, insight 필드가 모두 필요합니다.",
+                )
+        elif effective_format_type == ExperienceFormatType.STAR:
+            if not all(update_data.get(f) for f in ["situation", "task", "action", "result"]):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="STAR 형식으로 변경하려면 situation, task, action, result 필드가 모두 필요합니다.",
+                )
+        elif effective_format_type == ExperienceFormatType.FREE:
+            if not update_data.get("content"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="FREE 형식으로 변경하려면 content 필드가 필요합니다.",
+                )
+
+        # Clear old format's fields
+        if existing.format_type == ExperienceFormatType.STAR:
+            for field in ["situation", "task", "action", "result"]:
+                update_data.setdefault(field, None)
+        elif existing.format_type == ExperienceFormatType.PSI:
+            for field in ["problem", "solution", "insight"]:
+                update_data.setdefault(field, None)
+        elif existing.format_type == ExperienceFormatType.FREE:
+            update_data.setdefault("content", None)
 
     updated_experience = existing.model_copy(update=update_data)
     updated_experience.updated_at = datetime.now(timezone.utc)
@@ -747,17 +782,17 @@ async def update_experience(
         )
 
     # Check if content changed (need to regenerate embedding and tags)
-    # Content fields depend on format type
-    if existing.format_type == ExperienceFormatType.STAR:
+    # Content fields depend on effective format type
+    if effective_format_type == ExperienceFormatType.STAR:
         content_fields = {"title", "situation", "task", "action", "result"}
-    elif existing.format_type == ExperienceFormatType.PSI:
+    elif effective_format_type == ExperienceFormatType.PSI:
         content_fields = {"title", "problem", "solution", "insight"}
-    elif existing.format_type == ExperienceFormatType.FREE:
+    elif effective_format_type == ExperienceFormatType.FREE:
         content_fields = {"title", "content"}
     else:
         content_fields = {"title"}
 
-    content_changed = any(field in update_data for field in content_fields)
+    content_changed = any(field in update_data for field in content_fields) or new_format_type is not None
 
     if content_changed:
         # Regenerate tags and category using AI (single call)
