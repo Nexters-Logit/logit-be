@@ -1092,7 +1092,7 @@ async def get_experiences_with_question_similarity(
 
         # Base score + small bonuses, multiplied by content quality
         raw_score = base_score + (tag_score * 0.1) + (category_score * 0.05)
-        final_score = min(raw_score * quality, 1.0)
+        final_score = min(raw_score * quality + 0.15, 1.0)
 
         results_with_scores.append((experience, final_score))
 
