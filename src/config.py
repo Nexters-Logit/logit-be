@@ -127,7 +127,7 @@ class Settings(BaseSettings):
     MCP_TOKEN_EXPIRE_DAYS: int = 30
 
     # Chat Rate Limit
-    CHAT_DAILY_LIMIT: int = 10  # 일일 채팅 제한 횟수
+    CHAT_DAILY_LIMIT: int = 1000  # 일일 채팅 제한 횟수
 
     # Test User IDs (채팅 제한 면제)
     TEST_USER_IDS: list[str] = []
