@@ -100,6 +100,7 @@ class ExperienceUpdate(BaseModel):
     start_date: dt.date | None = Field(None, description="경험 시작 날짜")
     end_date: dt.date | None = Field(None, description="경험 종료 날짜")
     experience_type: ExperienceType | None = Field(None, description="경험 타입")
+    format_type: ExperienceFormatType | None = Field(None, description="경험 형식 변경 (STAR/PSI/FREE). 변경 시 새 형식에 필요한 필드를 함께 제공해야 합니다.")
 
     # STAR format fields
     situation: str | None = Field(None, min_length=1, max_length=5000, description="상황 (STAR의 S)")
