@@ -125,11 +125,14 @@ class Settings(BaseSettings):
     MCP_JWT_SECRET: str
     MCP_TOKEN_EXPIRE_DAYS: int = 30
 
-    # Chat Rate Limit
-    CHAT_DAILY_LIMIT: int = 10  # 일일 채팅 제한 횟수
-
     # Test User IDs (채팅 제한 면제)
     TEST_USER_IDS: list[str] = []
+
+    # PayApp 결제
+    PAYAPP_USERID: str | None = None
+    PAYAPP_LINKKEY: str | None = None
+    PAYAPP_LINKVAL: str | None = None
+    PAYAPP_CALLBACK_URL: str = "http://localhost:8000/api/v1/payments/webhook"
 
     # Sentry
     SENTRY_DSN: str | None = None
