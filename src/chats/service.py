@@ -10,10 +10,11 @@ from sqlmodel import select
 from src.exceptions import ForbiddenError
 from src.projects.models import Project
 from src.questions.models import Question
+from src.subscription.models import Subscription
+from src.subscription.usage import UsageLimiter
 
 from .llm_service import generate_ai_response_stream
 from .models import Chat, ChatRole
-from .rate_limit import ChatRateLimiter
 from .schemas import ChatHistoryItem, ChatHistoryResponse
 
 logger = logging.getLogger(__name__)
@@ -88,7 +89,8 @@ async def send_chat_stream(
     content: str,
     experience_ids: list[str] | None = None,
     user_id: UUID,
-    rate_limiter: ChatRateLimiter | None = None,
+    usage_limiter: UsageLimiter | None = None,
+    subscription: Subscription | None = None,
     is_test_user: bool = False,
 ) -> AsyncGenerator[str, None]:
     """메시지 전송 및 AI 응답 스트리밍"""
@@ -145,7 +147,16 @@ async def send_chat_stream(
             # 5. is_draft는 llm_service 파이프라인 분기에서 결정됨
             is_draft = chunk_data.get("is_draft", False)
 
-            # 6. AI 메시지 저장
+            # 6. 초안 한도 체크 및 카운트 (테스트 유저 면제)
+            draft_limit_exceeded = False
+            if usage_limiter and is_draft and not is_test_user:
+                draft_ok, _ = await usage_limiter.check_draft(user_id, subscription)
+                if draft_ok:
+                    await usage_limiter.increment_draft(user_id, subscription)
+                else:
+                    draft_limit_exceeded = True
+
+            # 7. AI 메시지 저장
             ai_chat = await create_assistant_chat(
                 db=db,
                 question=question,
@@ -154,19 +165,21 @@ async def send_chat_stream(
                 experience_ids=experience_ids,
             )
 
-            # 7. 스트리밍 완료 후 채팅 횟수 증가 (테스트 유저는 면제)
-            done_data = {
+            # 8. 채팅 횟수 증가 및 남은 횟수 응답 (테스트 유저 면제)
+            done_data: dict = {
                 "type": "done",
                 "chat_id": str(ai_chat.id),
                 "is_draft": is_draft,
+                "draft_limit_exceeded": draft_limit_exceeded,
             }
-            if rate_limiter:
-                if is_test_user:
-                    done_data["remaining_chats"] = -1  # 무제한
-                else:
-                    await rate_limiter.increment(user_id)
-                    remaining = await rate_limiter.get_remaining(user_id)
-                    done_data["remaining_chats"] = remaining
+            if usage_limiter and not is_test_user:
+                await usage_limiter.increment_chat(user_id, subscription)
+                remaining = await usage_limiter.get_remaining(user_id, subscription)
+                done_data["remaining_chats"] = remaining["chat"]
+                done_data["remaining_drafts"] = remaining["draft"]
+            else:
+                done_data["remaining_chats"] = None  # 무제한
+                done_data["remaining_drafts"] = None
             yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
 
         elif chunk_data["type"] == "error":
@@ -189,7 +202,8 @@ async def get_chat_history_response(
     user_id: UUID,
     cursor: str | None = None,
     size: int = 20,
-    remaining_chats: int = 0,
+    remaining_chats: int | None = None,
+    remaining_drafts: int | None = None,
 ) -> ChatHistoryResponse | None:
     """채팅 히스토리 조회 (Cursor 기반 페이지네이션)"""
 
@@ -288,4 +302,5 @@ async def get_chat_history_response(
         next_cursor=next_cursor,
         has_more=has_more,
         remaining_chats=remaining_chats,
+        remaining_drafts=remaining_drafts,
     )

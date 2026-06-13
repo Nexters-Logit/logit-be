@@ -28,11 +28,15 @@ def create_refresh_token(subject: str | Any) -> str:
     return encoded_jwt
 
 
-def create_mcp_token(subject: str | Any) -> str:
-    """MCP 서버 전용 JWT 토큰 생성. logit-mcp와 MCP_JWT_SECRET을 공유한다."""
+def create_mcp_token(subject: str | Any, expires_at: datetime | None = None) -> str:
+    """
+    MCP 서버 전용 JWT 토큰 생성. logit-mcp와 MCP_JWT_SECRET을 공유한다.
+
+    expires_at을 넘기면 구독 만료일을 토큰 만료일로 사용한다.
+    """
     if not settings.MCP_JWT_SECRET:
         raise ValueError("MCP_JWT_SECRET is not configured")
-    expire = datetime.now(timezone.utc) + timedelta(days=settings.MCP_TOKEN_EXPIRE_DAYS)
+    expire = expires_at or (datetime.now(timezone.utc) + timedelta(days=settings.MCP_TOKEN_EXPIRE_DAYS))
     to_encode = {"exp": expire, "sub": str(subject), "type": "mcp"}
     return jwt.encode(to_encode, settings.MCP_JWT_SECRET, algorithm=settings.ALGORITHM)
 
