@@ -48,7 +48,7 @@ def test_user(session: Session) -> User:
     user = User(
         email="test@example.com",
         full_name="Test User",
-        oauth_provider=OAuthProvider.GOOGLE,
+        oauth_provider=OAuthProvider.google,
         oauth_provider_id="google_test_123",
         is_active=True,
     )
@@ -1043,7 +1043,7 @@ def test_get_experiences_by_question_other_user(
     other_user = User(
         email="other@example.com",
         full_name="Other User",
-        oauth_provider=OAuthProvider.GOOGLE,
+        oauth_provider=OAuthProvider.google,
         oauth_provider_id="google_other_123",
         is_active=True,
     )

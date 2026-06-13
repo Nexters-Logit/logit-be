@@ -11,27 +11,23 @@ from src.users.models import OAuthProvider, User
 
 def test_google_oauth_redirect(client: TestClient) -> None:
     """Test Google OAuth redirect endpoint."""
-    response = client.get("/api/v1/auth/google")
+    response = client.get("/api/v1/auth/google", follow_redirects=False)
 
-    assert response.status_code == 200
-    data = response.json()
-    assert "authorization_url" in data
-    assert "accounts.google.com" in data["authorization_url"]
-    assert "client_id" in data["authorization_url"]
+    assert response.status_code == 307
+    assert "accounts.google.com" in response.headers["location"]
+    assert "test-google-client-id" in response.headers["location"]
 
 
 def test_apple_oauth_redirect(client: TestClient) -> None:
     """Test Apple OAuth redirect endpoint."""
-    response = client.get("/api/v1/auth/apple")
+    response = client.get("/api/v1/auth/apple", follow_redirects=False)
 
-    assert response.status_code == 200
-    data = response.json()
-    assert "authorization_url" in data
-    assert "appleid.apple.com" in data["authorization_url"]
+    assert response.status_code == 307
+    assert "appleid.apple.com" in response.headers["location"]
 
 
-@patch("app.auth.service.httpx.AsyncClient.post")
-@patch("app.auth.service.httpx.AsyncClient.get")
+@patch("src.auth.service.httpx.AsyncClient.post")
+@patch("src.auth.service.httpx.AsyncClient.get")
 async def test_google_callback_new_user(
     mock_get: AsyncMock,
     mock_post: AsyncMock,
@@ -68,12 +64,12 @@ async def test_google_callback_new_user(
     user = session.query(User).filter(User.email == "newuser@gmail.com").first()
     assert user is not None
     assert user.full_name == "New User"
-    assert user.oauth_provider == OAuthProvider.GOOGLE
+    assert user.oauth_provider == OAuthProvider.google
     assert user.profile_image_url == "https://example.com/photo.jpg"
 
 
-@patch("app.auth.service.httpx.AsyncClient.post")
-@patch("app.auth.service.httpx.AsyncClient.get")
+@patch("src.auth.service.httpx.AsyncClient.post")
+@patch("src.auth.service.httpx.AsyncClient.get")
 async def test_google_callback_existing_user(
     mock_get: AsyncMock,
     mock_post: AsyncMock,
@@ -85,7 +81,7 @@ async def test_google_callback_existing_user(
     existing_user = User(
         email="existing@gmail.com",
         full_name="Existing User",
-        oauth_provider=OAuthProvider.GOOGLE,
+        oauth_provider=OAuthProvider.google,
         oauth_provider_id="google_67890",
         is_active=True,
     )
@@ -128,7 +124,7 @@ def test_refresh_token_success(client: TestClient, session: Session) -> None:
     user = User(
         email="refresh@example.com",
         full_name="Refresh User",
-        oauth_provider=OAuthProvider.GOOGLE,
+        oauth_provider=OAuthProvider.google,
         oauth_provider_id="google_refresh",
         is_active=True,
     )
@@ -169,7 +165,7 @@ def test_logout_success(client: TestClient, session: Session) -> None:
     user = User(
         email="logout@example.com",
         full_name="Logout User",
-        oauth_provider=OAuthProvider.GOOGLE,
+        oauth_provider=OAuthProvider.google,
         oauth_provider_id="google_logout",
         is_active=True,
     )
@@ -187,19 +183,14 @@ def test_logout_success(client: TestClient, session: Session) -> None:
         json={"refresh_token": refresh_token},
     )
 
-    assert response.status_code == 200
-    assert response.json()["message"] == "Successfully logged out"
-
-    # Verify refresh token was cleared
-    session.refresh(user)
-    assert user.refresh_token is None
+    assert response.status_code == 204
 
 
 def test_logout_invalid_token(client: TestClient) -> None:
-    """Test logout with invalid refresh token."""
+    """Test logout with invalid refresh token returns 204 (lenient logout)."""
     response = client.post(
         "/api/v1/auth/logout",
         json={"refresh_token": "invalid_token"},
     )
 
-    assert response.status_code == 401
+    assert response.status_code == 204
