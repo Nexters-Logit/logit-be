@@ -1,8 +1,8 @@
 import asyncio
 import json
 import logging
+from collections.abc import AsyncGenerator
 from enum import Enum
-from typing import AsyncGenerator
 from uuid import UUID
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -13,13 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.experience.models import Experience, ExperienceFormatType
 from src.experience.service import get_experience
-from .prompts import (
-    CLASSIFICATION_PROMPT,
-    GENERATION_PROMPT,
-    CONVERSATION_SYSTEM_PROMPT,
-)
+
 from .chat_history import PostgresChatMessageHistory
 from .dependencies import LLMProvider, get_llm_provider
+from .prompts import (
+    CLASSIFICATION_PROMPT,
+    CONVERSATION_SYSTEM_PROMPT,
+    GENERATION_PROMPT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -96,11 +97,11 @@ def _format_experiences_with_roles(experiences: list[Experience]) -> str:
     if not experiences:
         return "선택된 경험이 없습니다."
 
-    mock_scores = [1.0, 0.7, 0.4]
+    position_weights = [1.0, 0.7, 0.4]
     parts = []
     for i, exp in enumerate(experiences):
         is_primary = (i == 0)
-        score = mock_scores[min(i, len(mock_scores) - 1)]
+        score = position_weights[min(i, len(position_weights) - 1)]
         parts.append(_format_experience_with_role(exp, is_primary, score))
 
     return "\n\n".join(parts)

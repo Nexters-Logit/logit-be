@@ -1,5 +1,4 @@
-import secrets
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     AnyUrl,
@@ -9,7 +8,7 @@ from pydantic import (
     model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing_extensions import Annotated, Self
+from typing_extensions import Self
 
 
 def parse_cors(v: Any) -> list[str] | str:

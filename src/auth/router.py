@@ -9,8 +9,8 @@ from fastapi import APIRouter, Cookie, Form, Header, HTTPException, Response, st
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from src.auth import constants, schemas, service
-from src.auth.utils import get_frontend_callback_url, get_oauth_redirect_uri
 from src.auth.exceptions import OAuthError, OAuthProviderNotConfiguredError
+from src.auth.utils import get_frontend_callback_url, get_oauth_redirect_uri
 from src.common.responses import (
     ERROR_400_BAD_REQUEST,
     ERROR_401_UNAUTHORIZED,

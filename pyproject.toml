@@ -54,6 +54,7 @@ dev = [
     "pytest-cov>=6.0.0",
     "mypy>=1.8.0",
     "ruff>=0.2.2",
+    "aiosqlite>=0.22.1",
 ]
 
 [build-system]
@@ -112,6 +113,9 @@ omit = [
     "*/tests/*",
     "*/__init__.py",
 ]
+
+[tool.pyrefly]
+python_interpreter = ".venv/bin/python"
 
 [tool.coverage.report]
 show_missing = true

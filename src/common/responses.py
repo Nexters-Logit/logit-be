@@ -2,7 +2,6 @@
 
 from typing import Any
 
-
 # ============================================================================
 # Error Response Definitions (for OpenAPI responses parameter)
 # ============================================================================
@@ -102,39 +101,39 @@ ERROR_503_SERVICE_UNAVAILABLE: dict[str, Any] = {
 # ============================================================================
 
 # 인증이 필요한 엔드포인트의 공통 에러
-RESPONSES_AUTH_REQUIRED: dict[int, dict[str, Any]] = {
+RESPONSES_AUTH_REQUIRED: dict[int | str, dict[str, Any]] = {
     401: ERROR_401_UNAUTHORIZED,
     403: ERROR_403_FORBIDDEN,
 }
 
 # 기본 CRUD 작업 에러
-RESPONSES_CRUD: dict[int, dict[str, Any]] = {
+RESPONSES_CRUD: dict[int | str, dict[str, Any]] = {
     400: ERROR_400_BAD_REQUEST,
     404: ERROR_404_NOT_FOUND,
     422: ERROR_422_VALIDATION_ERROR,
 }
 
 # 인증 + CRUD 조합 (목록/상세 조회, 수정, 삭제)
-RESPONSES_CRUD_WITH_AUTH: dict[int, dict[str, Any]] = {
+RESPONSES_CRUD_WITH_AUTH: dict[int | str, dict[str, Any]] = {
     **RESPONSES_AUTH_REQUIRED,
     **RESPONSES_CRUD,
 }
 
 # 생성 작업 에러
-RESPONSES_CREATE: dict[int, dict[str, Any]] = {
+RESPONSES_CREATE: dict[int | str, dict[str, Any]] = {
     400: ERROR_400_BAD_REQUEST,
     409: ERROR_409_CONFLICT,
     422: ERROR_422_VALIDATION_ERROR,
 }
 
 # 인증 + 생성 조합
-RESPONSES_CREATE_WITH_AUTH: dict[int, dict[str, Any]] = {
+RESPONSES_CREATE_WITH_AUTH: dict[int | str, dict[str, Any]] = {
     **RESPONSES_AUTH_REQUIRED,
     **RESPONSES_CREATE,
 }
 
 # 모든 공통 에러 (서버 에러 포함)
-RESPONSES_COMMON: dict[int, dict[str, Any]] = {
+RESPONSES_COMMON: dict[int | str, dict[str, Any]] = {
     400: ERROR_400_BAD_REQUEST,
     401: ERROR_401_UNAUTHORIZED,
     403: ERROR_403_FORBIDDEN,

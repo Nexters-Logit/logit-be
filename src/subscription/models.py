@@ -4,7 +4,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, Enum as SAEnum, String, UniqueConstraint, text
+from sqlalchemy import Column, DateTime, String, UniqueConstraint, text
+from sqlalchemy import Enum as SAEnum
 from sqlmodel import Field, SQLModel
 
 

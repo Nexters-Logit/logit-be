@@ -14,13 +14,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth import constants
-from src.auth.utils import generate_random_nickname, get_oauth_redirect_uri
 from src.auth.exceptions import (
     InvalidTokenError,
     OAuthError,
     OAuthProviderNotConfiguredError,
 )
 from src.auth.schemas import OAuthUserCreate
+from src.auth.utils import generate_random_nickname, get_oauth_redirect_uri
 from src.config import settings
 from src.security import create_access_token, create_refresh_token
 from src.users import service as user_service
@@ -156,7 +156,7 @@ async def _find_or_create_user(
         )
         if existing:
             return existing, False
-        raise OAuthError("Account creation conflict. Please try again.")
+        raise OAuthError("Account creation conflict. Please try again.") from None
 
 
 async def _generate_tokens_for_user(

@@ -3,13 +3,14 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
-from .schemas import ChatRequest, ChatHistoryResponse
-from .service import send_chat_stream, get_chat_history_response
-from .swagger import SEND_CHAT_SWAGGER, GET_CHAT_HISTORY_SWAGGER
-from .dependencies import RateLimiterDep
-from src.users.dependencies import ActiveUser, SessionDep
-from src.experience.dependencies import QdrantDep
 from src.config import settings
+from src.experience.dependencies import QdrantDep
+from src.users.dependencies import ActiveUser, SessionDep
+
+from .dependencies import RateLimiterDep
+from .schemas import ChatHistoryResponse, ChatRequest
+from .service import get_chat_history_response, send_chat_stream
+from .swagger import GET_CHAT_HISTORY_SWAGGER, SEND_CHAT_SWAGGER
 
 router = APIRouter()
 
@@ -61,7 +62,7 @@ async def send_chat(
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            
+
         }
     )
 

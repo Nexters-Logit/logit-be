@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import func
@@ -51,7 +50,7 @@ async def create_project(
 
 async def get_projects(
     session: AsyncSession, user_id: UUID, skip: int = 0, limit: int = 100
-) -> List[dict]:
+) -> list[dict]:
     """사용자의 프로젝트 목록 조회 (삭제되지 않은 것만, 최근 활동순, 문항 1번 ID 포함)"""
     # 각 프로젝트에서 삭제되지 않은 문항 중 가장 작은 order의 ID를 서브쿼리로 가져옴
     first_question_subquery = (
@@ -121,7 +120,7 @@ async def get_projects(
 
 async def get_project(
     session: AsyncSession, project_id: UUID, user_id: UUID
-) -> Optional[Project]:
+) -> Project | None:
     """프로젝트 단건 조회 (삭제되지 않은 것만, 조회 시 updated_at 갱신)"""
     statement = (
         select(Project)

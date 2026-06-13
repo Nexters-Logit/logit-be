@@ -1,19 +1,20 @@
 import json
 import logging
-from typing import AsyncGenerator, List
+from collections.abc import AsyncGenerator
 from uuid import UUID
 
 from qdrant_client import QdrantClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from .models import Chat, ChatRole
-from .schemas import ChatHistoryResponse, ChatHistoryItem
-from .llm_service import generate_ai_response_stream
-from .rate_limit import ChatRateLimiter
 from src.exceptions import ForbiddenError
-from src.questions.models import Question
 from src.projects.models import Project
+from src.questions.models import Question
+
+from .llm_service import generate_ai_response_stream
+from .models import Chat, ChatRole
+from .rate_limit import ChatRateLimiter
+from .schemas import ChatHistoryItem, ChatHistoryResponse
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ async def create_user_chat(
     db: AsyncSession,
     question: Question,
     content: str,
-    experience_ids: List[str] | None = None
+    experience_ids: list[str] | None = None
 ) -> Chat:
     """사용자 메시지 생성"""
 
@@ -47,7 +48,7 @@ async def create_assistant_chat(
     question: Question,
     content: str,
     is_draft: bool,
-    experience_ids: List[str] | None = None
+    experience_ids: list[str] | None = None
 ) -> Chat:
     """AI 메시지 생성"""
 
@@ -71,7 +72,10 @@ async def create_assistant_chat(
 async def get_question_by_id(db: AsyncSession, question_id: UUID) -> Question | None:
     """Question 조회"""
 
-    statement = select(Question).where(Question.id == question_id)
+    statement = select(Question).where(
+        Question.id == question_id,
+        Question.deleted_at.is_(None),
+    )
     result = await db.execute(statement)
     return result.scalars().first()
 
@@ -230,7 +234,7 @@ async def get_chat_history_response(
                 (Chat.created_at < cursor_created_at) |
                 ((Chat.created_at == cursor_created_at) & (Chat.id < cursor_uuid))
                 )
-                
+
     # size + 1로 조회해서 has_more 판단
     messages_stmt = messages_stmt.order_by(Chat.created_at.desc()).limit(size + 1)
 
