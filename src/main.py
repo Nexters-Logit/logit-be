@@ -4,30 +4,30 @@ FastAPI application with domain-driven structure.
 Inspired by fastapi-best-practices and Netflix Dispatch.
 """
 
-import secrets
 import logging
-from logging.config import fileConfig
-from contextlib import asynccontextmanager
+import secrets
 import time
+from contextlib import asynccontextmanager
+from logging.config import fileConfig
 
 import sentry_sdk
-from fastapi import Depends, FastAPI, HTTPException, status, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from src.auth import router as auth_router
+from src.chats import router as chats_router
+from src.common.slack import send_error_notification
 from src.config import settings
 from src.database import init_qdrant_collection
 from src.experience import router as experience_router
 from src.projects import router as projects_router
 from src.questions import router as questions_router
-from src.users import router as users_router
-from src.chats import router as chats_router
 from src.report import router as report_router
 from src.subscription import router as subscription_router
-from src.common.slack import send_error_notification
+from src.users import router as users_router
 
 # Load logging configuration
 fileConfig('logging.ini', disable_existing_loggers=False)
@@ -133,7 +133,7 @@ async def logging_middleware(request: Request, call_next):
     try:
         response = await call_next(request)
         process_time = (time.time() - start_time) * 1000
-        
+
         logger.info(
             f'"{request.method} {request.url.path}" {response.status_code} {process_time:.2f}ms'
         )

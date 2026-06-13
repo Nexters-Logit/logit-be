@@ -10,6 +10,7 @@ from fastapi import Depends
 if TYPE_CHECKING:
     from langchain_anthropic import ChatAnthropic
     from langchain_openai import ChatOpenAI
+
     from .rate_limit import ChatRateLimiter
 
 from src.config import settings
@@ -79,6 +80,7 @@ LLMDep = Annotated[LLMProvider, Depends(get_llm_provider)]
 async def get_rate_limiter():
     """ChatRateLimiter 인스턴스 반환"""
     from src.database import get_redis
+
     from .rate_limit import ChatRateLimiter
 
     redis = await get_redis()

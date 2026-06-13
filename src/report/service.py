@@ -6,8 +6,8 @@ from collections import Counter
 from fastapi import HTTPException, status
 from pydantic import ValidationError
 from qdrant_client import QdrantClient
-from qdrant_client.models import Filter, FieldCondition, MatchValue
 from qdrant_client.http.exceptions import UnexpectedResponse
+from qdrant_client.models import FieldCondition, Filter, MatchValue
 
 from src.config import settings
 from src.experience.models import Experience

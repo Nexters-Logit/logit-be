@@ -1,13 +1,18 @@
 """프로젝트 API 엔드포인트"""
 
-from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 
 from src.common.responses import RESPONSES_CREATE_WITH_AUTH, RESPONSES_CRUD_WITH_AUTH
 from src.projects import service
-from src.projects.schemas import ProjectCreate, ProjectCreateResponse, ProjectListItem, ProjectRead, ProjectUpdate
+from src.projects.schemas import (
+    ProjectCreate,
+    ProjectCreateResponse,
+    ProjectListItem,
+    ProjectRead,
+    ProjectUpdate,
+)
 from src.users.dependencies import ActiveUser, SessionDep
 
 router = APIRouter()
@@ -43,7 +48,7 @@ async def create_project(
 
 @router.get(
     "/",
-    response_model=List[ProjectListItem],
+    response_model=list[ProjectListItem],
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="프로젝트 목록 조회",
 )

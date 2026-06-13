@@ -1,10 +1,9 @@
 from datetime import datetime, timezone
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from src.projects.models import Project
@@ -33,13 +32,13 @@ async def create_question(
 ) -> Question:
     """문항 단건 생성"""
 
-    statement = select(Project.id).where(                                                                                                                                                          
-        Project.id == project_id,                                                                                                                                                                  
-        Project.user_id == user_id,                                                                                                                                                                
-        Project.deleted_at.is_(None)                                                                                                                                                               
-    )                                                                                                                                                                                              
-    result = await session.execute(statement)                                                                                                                                                      
-    if not result.scalar():                                                                                                                                                                        
+    statement = select(Project.id).where(
+        Project.id == project_id,
+        Project.user_id == user_id,
+        Project.deleted_at.is_(None)
+    )
+    result = await session.execute(statement)
+    if not result.scalar():
         raise HTTPException(status_code=404, detail="Project not found")
 
     next_order = await get_next_order(session, project_id, user_id)
@@ -62,7 +61,7 @@ async def create_questions_bulk(
     bulk_create: BulkQuestionCreate,
     project_id: UUID,
     user_id: UUID,
-) -> List[Question]:
+) -> list[Question]:
     """문항 다건 생성"""
 
     statement = select(Project.id).where(
@@ -96,7 +95,7 @@ async def create_questions_bulk(
 
 async def get_questions(
     session: AsyncSession, project_id: UUID, user_id: UUID
-) -> List[Question]:
+) -> list[Question]:
     """프로젝트의 문항 목록 조회 (삭제되지 않은 것만, order 순)"""
     statement = (
         select(Question)
@@ -111,7 +110,7 @@ async def get_questions(
 
 async def get_question(
     session: AsyncSession, question_id: UUID, project_id: UUID, user_id: UUID
-) -> Optional[Question]:
+) -> Question | None:
     """문항 단건 조회 (삭제되지 않은 것만)"""
     statement = (
         select(Question)

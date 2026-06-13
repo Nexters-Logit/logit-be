@@ -1,6 +1,5 @@
 """문항 API 엔드포인트"""
 
-from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
@@ -48,7 +47,7 @@ async def create_question(
 
 @router.post(
     "/bulk",
-    response_model=List[QuestionListItem],
+    response_model=list[QuestionListItem],
     status_code=status.HTTP_201_CREATED,
     responses=RESPONSES_CREATE_WITH_AUTH,
     summary="문항 다건 생성",
@@ -75,7 +74,7 @@ async def create_questions_bulk(
 
 @router.get(
     "/",
-    response_model=List[QuestionListItem],
+    response_model=list[QuestionListItem],
     responses=RESPONSES_CRUD_WITH_AUTH,
     summary="문항 목록 조회",
 )

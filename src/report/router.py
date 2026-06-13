@@ -1,6 +1,6 @@
 """Report API 엔드포인트"""
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter
 
 from src.common.responses import RESPONSES_CRUD_WITH_AUTH
 from src.experience.dependencies import QdrantDep

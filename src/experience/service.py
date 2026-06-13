@@ -7,15 +7,25 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
-from openai import AsyncOpenAI, APIError, APIConnectionError, RateLimitError, AuthenticationError
+from openai import (
+    APIConnectionError,
+    APIError,
+    AsyncOpenAI,
+    AuthenticationError,
+    RateLimitError,
+)
 from qdrant_client import QdrantClient
-from qdrant_client.models import Direction, Filter, FieldCondition, MatchValue, OrderBy, PointStruct
 from qdrant_client.http.exceptions import UnexpectedResponse
+from qdrant_client.models import (
+    Direction,
+    FieldCondition,
+    Filter,
+    MatchValue,
+    OrderBy,
+    PointStruct,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-
-# Initialize logger
-logger = logging.getLogger(__name__)
 
 from src.config import settings
 from src.experience.models import (
@@ -31,6 +41,9 @@ from src.experience.schemas import (
 )
 from src.projects.models import Project
 from src.questions.models import Question
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 # Initialize OpenAI async client
 openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
@@ -319,7 +332,7 @@ def _calculate_tag_matching_score(experience_tags: str, question_tags: list[str]
         return 0.0
 
     # Parse experience tags
-    exp_tags_set = set(tag.strip() for tag in experience_tags.split(","))
+    exp_tags_set = {tag.strip() for tag in experience_tags.split(",")}
     question_tags_set = set(question_tags)
 
     # Calculate intersection
@@ -1033,7 +1046,7 @@ async def get_experiences_with_question_similarity(
     w_question, w_job, w_company = 0.6, 0.25, 0.15
     combined = [
         q * w_question + j * w_job + c * w_company
-        for q, j, c in zip(question_emb, job_emb, company_emb)
+        for q, j, c in zip(question_emb, job_emb, company_emb, strict=True)
     ]
     # L2 normalize
     norm = sum(x ** 2 for x in combined) ** 0.5
