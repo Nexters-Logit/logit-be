@@ -1,6 +1,6 @@
 """구독 서비스."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -89,11 +89,11 @@ async def get_or_create_mcp_token(
     session: AsyncSession, user_id: UUID
 ) -> tuple[str, bool]:
     """
-    MCP 토큰을 반환한다.
+    MCP 토큰을 반환한다. 유료 구독(BASIC)이 활성 상태일 때만 발급.
 
     Returns:
-        (token, is_expired): 토큰 문자열과 만료 여부.
-        만료된 경우 token은 빈 문자열, is_expired=True.
+        (token, is_unavailable): 토큰 문자열과 사용 불가 여부.
+        구독 없음·만료·미결제 → token="", is_unavailable=True.
     """
     result = await session.execute(
         select(Subscription).where(
@@ -104,27 +104,17 @@ async def get_or_create_mcp_token(
     sub = result.scalar_one_or_none()
     now = datetime.now(timezone.utc)
 
-    if sub is None:
-        # 구독 이력 없음 → 무료 체험 발급 (최초 1회)
-        sub = Subscription(
-            user_id=user_id,
-            sub_type=SubscriptionType.MCP,
-            is_active=True,
-            plan=SubscriptionPlan.FREE_TRIAL,
-            started_at=now,
-            expires_at=now + timedelta(days=30),
-            token=create_mcp_token(subject=str(user_id)),
-        )
-        session.add(sub)
-        await session.commit()
-        await session.refresh(sub)
-        return sub.token, False
+    # 구독 없음 또는 유료 플랜(BASIC)이 아닌 경우 거부
+    if sub is None or sub.plan != SubscriptionPlan.BASIC:
+        return "", True
 
+    # 만료·비활성 체크
     if not sub.is_active or (sub.expires_at is not None and sub.expires_at < now):
         return "", True
 
+    # 토큰이 없으면 발급 (구독 만료일 기준)
     if not sub.token:
-        sub.token = create_mcp_token(subject=str(user_id))
+        sub.token = create_mcp_token(subject=str(user_id), expires_at=sub.expires_at)
         session.add(sub)
         await session.commit()
         await session.refresh(sub)

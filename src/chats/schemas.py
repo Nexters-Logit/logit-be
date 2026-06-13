@@ -99,8 +99,13 @@ class ChatHistoryResponse(BaseModel):
         default=False,
         description="더 많은 데이터가 있는지 여부"
     )
-    remaining_chats: int = Field(
-        description="오늘 남은 채팅 횟수"
+    remaining_chats: int | None = Field(
+        default=None,
+        description="이번 달 남은 채팅 횟수 (null = 무제한)"
+    )
+    remaining_drafts: int | None = Field(
+        default=None,
+        description="이번 달 남은 초안 생성 횟수 (null = 무제한)"
     )
 
     model_config = {

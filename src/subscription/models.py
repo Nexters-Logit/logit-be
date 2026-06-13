@@ -15,9 +15,9 @@ class SubscriptionType(str, Enum):
 
 
 class SubscriptionPlan(str, Enum):
-    FREE_TRIAL = "free_trial"
-    BASIC = "basic"
-    PRO = "pro"
+    BASIC = "basic"  # MCP 구독
+    LITE = "lite"    # Logit Lite
+    PRO = "pro"      # Logit Pro
 
 
 class Subscription(SQLModel, table=True):
@@ -49,6 +49,9 @@ class Subscription(SQLModel, table=True):
         default=None,
         sa_column=Column(String, nullable=True),
     )
+
+    # False면 만료일까지만 사용 가능하고 다음 달 자동결제 없음
+    is_auto_renew: bool = Field(default=True)
 
     started_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
