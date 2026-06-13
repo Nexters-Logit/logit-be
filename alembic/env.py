@@ -14,6 +14,7 @@ from src.projects.models import Project  # noqa: F401
 from src.questions.models import Question  # noqa: F401
 from src.chats.models import Chat  # noqa: F401
 from src.subscription.models import Subscription  # noqa: F401
+from src.plans.models import Plan  # noqa: F401
 from src.config import settings
 
 # this is the Alembic Config object
