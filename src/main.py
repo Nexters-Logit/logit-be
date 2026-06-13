@@ -23,6 +23,7 @@ from src.common.slack import send_error_notification
 from src.config import settings
 from src.database import init_qdrant_collection
 from src.experience import router as experience_router
+from src.payment import router as payment_router
 from src.projects import router as projects_router
 from src.questions import router as questions_router
 from src.report import router as report_router
@@ -217,6 +218,11 @@ app.include_router(
     subscription_router.router,
     prefix=f"{settings.API_V1_STR}/subscriptions",
     tags=["Subscriptions"],
+)
+app.include_router(
+    payment_router.router,
+    prefix=f"{settings.API_V1_STR}/payments",
+    tags=["Payments"],
 )
 
 @app.get("/")
