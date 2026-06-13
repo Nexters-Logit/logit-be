@@ -56,6 +56,7 @@ jobs:
           MCP_JWT_SECRET: test-mcp-jwt-secret
           GOOGLE_CLIENT_ID: test-google-client-id
           GOOGLE_CLIENT_SECRET: test-google-client-secret
+          APPLE_CLIENT_ID: test-apple-client-id
 
   deploy:
     runs-on: ubuntu-latest

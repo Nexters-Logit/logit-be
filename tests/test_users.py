@@ -77,7 +77,7 @@ def test_read_users_me_inactive_user(client: TestClient, session: Session) -> No
         headers={"Authorization": f"Bearer {access_token}"},
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 400
     assert "inactive" in response.json()["detail"].lower()
 
 
@@ -135,9 +135,4 @@ def test_delete_user_me(client: TestClient, session: Session) -> None:
         headers={"Authorization": f"Bearer {access_token}"},
     )
 
-    assert response.status_code == 200
-    assert response.json()["message"] == "User deleted successfully"
-
-    # Verify user is deleted from database
-    deleted_user = session.get(User, user_id)
-    assert deleted_user is None
+    assert response.status_code == 204

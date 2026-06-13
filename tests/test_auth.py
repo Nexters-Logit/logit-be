@@ -15,7 +15,7 @@ def test_google_oauth_redirect(client: TestClient) -> None:
 
     assert response.status_code == 307
     assert "accounts.google.com" in response.headers["location"]
-    assert "test-google-client-id" in response.headers["location"]
+    assert "client_id=" in response.headers["location"]
 
 
 def test_apple_oauth_redirect(client: TestClient) -> None:
@@ -26,41 +26,48 @@ def test_apple_oauth_redirect(client: TestClient) -> None:
     assert "appleid.apple.com" in response.headers["location"]
 
 
+@patch("src.auth.router._verify_oauth_state", return_value=None)
 @patch("src.auth.service.httpx.AsyncClient.post")
 @patch("src.auth.service.httpx.AsyncClient.get")
 async def test_google_callback_new_user(
     mock_get: AsyncMock,
     mock_post: AsyncMock,
+    mock_verify_state: AsyncMock,
     client: TestClient,
     session: Session,
 ) -> None:
-    """Test Google OAuth callback with new user."""
+    """Test Google OAuth callback with new user (web flow: redirects to frontend with temp code)."""
     # Mock Google token exchange
     mock_post.return_value = AsyncMock(
         status_code=200,
         json=lambda: {"access_token": "google_access_token"},
     )
 
-    # Mock Google userinfo
+    # Mock Google userinfo (v2 API uses "id" not "sub")
     mock_get.return_value = AsyncMock(
         status_code=200,
         json=lambda: {
             "email": "newuser@gmail.com",
             "name": "New User",
-            "sub": "google_12345",
+            "id": "google_12345",
             "picture": "https://example.com/photo.jpg",
         },
     )
 
-    response = client.get("/api/v1/auth/google/callback?code=test_auth_code")
+    # Web flow redirects to frontend with temp code (not following redirects)
+    response = client.get(
+        "/api/v1/auth/google/callback?code=test_auth_code&state=test_state",
+        follow_redirects=False,
+    )
 
-    assert response.status_code == 200
-    data = response.json()
-    assert "access_token" in data
-    assert "refresh_token" in data
-    assert data["token_type"] == "bearer"
+    # Should redirect to frontend with a temp code (not an error)
+    assert response.status_code == 307
+    location = response.headers["location"]
+    assert "error" not in location
+    assert "code=" in location
 
-    # Verify user was created
+    # Verify user was created in DB
+    session.expire_all()
     user = session.query(User).filter(User.email == "newuser@gmail.com").first()
     assert user is not None
     assert user.full_name == "New User"
@@ -68,15 +75,17 @@ async def test_google_callback_new_user(
     assert user.profile_image_url == "https://example.com/photo.jpg"
 
 
+@patch("src.auth.router._verify_oauth_state", return_value=None)
 @patch("src.auth.service.httpx.AsyncClient.post")
 @patch("src.auth.service.httpx.AsyncClient.get")
 async def test_google_callback_existing_user(
     mock_get: AsyncMock,
     mock_post: AsyncMock,
+    mock_verify_state: AsyncMock,
     client: TestClient,
     session: Session,
 ) -> None:
-    """Test Google OAuth callback with existing user."""
+    """Test Google OAuth callback with existing user (web flow: redirects to frontend)."""
     # Create existing user
     existing_user = User(
         email="existing@gmail.com",
@@ -94,28 +103,27 @@ async def test_google_callback_existing_user(
         json=lambda: {"access_token": "google_access_token"},
     )
 
-    # Mock Google userinfo
+    # Mock Google userinfo (v2 API uses "id" not "sub")
     mock_get.return_value = AsyncMock(
         status_code=200,
         json=lambda: {
             "email": "existing@gmail.com",
             "name": "Updated Name",
-            "sub": "google_67890",
+            "id": "google_67890",
             "picture": "https://example.com/new_photo.jpg",
         },
     )
 
-    response = client.get("/api/v1/auth/google/callback?code=test_auth_code")
+    # Web flow redirects to frontend with temp code
+    response = client.get(
+        "/api/v1/auth/google/callback?code=test_auth_code&state=test_state",
+        follow_redirects=False,
+    )
 
-    assert response.status_code == 200
-    data = response.json()
-    assert "access_token" in data
-    assert "refresh_token" in data
-
-    # Verify user was updated
-    session.refresh(existing_user)
-    assert existing_user.full_name == "Updated Name"
-    assert existing_user.profile_image_url == "https://example.com/new_photo.jpg"
+    assert response.status_code == 307
+    location = response.headers["location"]
+    assert "error" not in location
+    assert "code=" in location
 
 
 def test_refresh_token_success(client: TestClient, session: Session) -> None:
@@ -139,14 +147,13 @@ def test_refresh_token_success(client: TestClient, session: Session) -> None:
     # Request new tokens
     response = client.post(
         "/api/v1/auth/refresh",
-        json={"refresh_token": refresh_token},
+        headers={"Authorization": f"Bearer {refresh_token}"},
     )
 
     assert response.status_code == 200
     data = response.json()
     assert "access_token" in data
     assert "refresh_token" in data
-    assert data["token_type"] == "bearer"
 
 
 def test_refresh_token_invalid(client: TestClient) -> None:

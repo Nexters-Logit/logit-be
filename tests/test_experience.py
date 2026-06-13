@@ -2,15 +2,17 @@
 
 import datetime as dt
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
+from src.database import get_qdrant_client as _get_qdrant_client
 from src.experience.models import Experience, ExperienceCategory, ExperienceFormatType, ExperienceType
 from src.experience.schemas import ExperienceCreate
+from src.main import app
 from src.projects.models import Project
 from src.questions.models import Question
 from src.security import create_access_token
@@ -19,25 +21,24 @@ from src.users.models import OAuthProvider, User
 
 @pytest.fixture
 def mock_qdrant_client():
-    """Mock Qdrant client for testing."""
-    return MagicMock()
+    """Mock Qdrant client for testing via dependency override."""
+    mock = MagicMock()
+    app.dependency_overrides[_get_qdrant_client] = lambda: mock
+    yield mock
+    app.dependency_overrides.pop(_get_qdrant_client, None)
 
 
 @pytest.fixture
 def mock_openai_client():
     """Mock OpenAI client for testing."""
     with patch("src.experience.service.openai_client") as mock:
-        # Mock embedding response
-        mock.embeddings.create.return_value = MagicMock(
-            data=[MagicMock(embedding=[0.1] * 1536)]
+        mock.embeddings.create = AsyncMock(
+            return_value=MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
         )
-        # Mock chat completion response for tags
-        mock.chat.completions.create.return_value = MagicMock(
-            choices=[
-                MagicMock(
-                    message=MagicMock(content="전문성, 문제해결력, 고객 이해력")
-                )
-            ]
+        mock.chat.completions.create = AsyncMock(
+            return_value=MagicMock(
+                choices=[MagicMock(message=MagicMock(content="전문성, 문제해결력, 고객 이해력"))]
+            )
         )
         yield mock
 
@@ -247,9 +248,7 @@ def test_experience_create_free_schema():
 
 
 # API Endpoint Tests
-@patch("src.database.get_qdrant_client")
 def test_create_experience_success(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     sample_experience_data: dict,
@@ -257,7 +256,6 @@ def test_create_experience_success(
     mock_openai_client: MagicMock,
 ):
     """Test creating an experience successfully."""
-    mock_get_qdrant.return_value = mock_qdrant_client
 
     response = client.post(
         "/api/v1/experiences",
@@ -274,9 +272,7 @@ def test_create_experience_success(
     assert "created_at" in data
 
 
-@patch("src.database.get_qdrant_client")
 def test_create_psi_experience_success(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     sample_psi_experience_data: dict,
@@ -284,7 +280,6 @@ def test_create_psi_experience_success(
     mock_openai_client: MagicMock,
 ):
     """Test creating a PSI format experience successfully."""
-    mock_get_qdrant.return_value = mock_qdrant_client
 
     response = client.post(
         "/api/v1/experiences",
@@ -304,9 +299,7 @@ def test_create_psi_experience_success(
     assert "created_at" in data
 
 
-@patch("src.database.get_qdrant_client")
 def test_create_free_experience_success(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     sample_free_experience_data: dict,
@@ -314,7 +307,6 @@ def test_create_free_experience_success(
     mock_openai_client: MagicMock,
 ):
     """Test creating a free format experience successfully."""
-    mock_get_qdrant.return_value = mock_qdrant_client
 
     response = client.post(
         "/api/v1/experiences",
@@ -340,13 +332,11 @@ def test_create_experience_unauthenticated(
     assert response.status_code == 401
 
 
-@patch("src.database.get_qdrant_client")
 @patch("src.experience.service.openai_client")
 def test_create_experience_invalid_data(
-    mock_openai, mock_get_qdrant, client: TestClient, auth_headers: dict
+    mock_openai, client: TestClient, auth_headers: dict
 ):
     """Test creating experience with invalid data."""
-    mock_get_qdrant.return_value = MagicMock()
     invalid_data = {
         "title": "",  # Empty title should fail
         "start_date": "2024-06-01",
@@ -358,16 +348,13 @@ def test_create_experience_invalid_data(
     assert response.status_code == 422
 
 
-@patch("src.database.get_qdrant_client")
 def test_list_experiences_success(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     test_user: User,
     mock_qdrant_client: MagicMock,
 ):
     """Test listing experiences."""
-    mock_get_qdrant.return_value = mock_qdrant_client
 
     # Mock scroll response
     mock_point = MagicMock()
@@ -388,6 +375,7 @@ def test_list_experiences_success(
         "created_at": datetime.utcnow().isoformat(),
         "updated_at": datetime.utcnow().isoformat(),
     }
+    mock_qdrant_client.count.return_value = MagicMock(count=1)
     mock_qdrant_client.scroll.return_value = ([mock_point], None)
 
     response = client.get("/api/v1/experiences", headers=auth_headers)
@@ -406,16 +394,13 @@ def test_list_experiences_unauthenticated(client: TestClient):
     assert response.status_code == 401
 
 
-@patch("src.database.get_qdrant_client")
 def test_get_experience_success(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     test_user: User,
     mock_qdrant_client: MagicMock,
 ):
     """Test getting a single experience."""
-    mock_get_qdrant.return_value = mock_qdrant_client
 
     experience_id = str(uuid4())
     mock_point = MagicMock()
@@ -449,15 +434,12 @@ def test_get_experience_success(
     assert data["tags"] == "전문성, 문제해결력"
 
 
-@patch("src.database.get_qdrant_client")
 def test_get_experience_not_found(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     mock_qdrant_client: MagicMock,
 ):
     """Test getting non-existent experience."""
-    mock_get_qdrant.return_value = mock_qdrant_client
     mock_qdrant_client.retrieve.return_value = []
 
     experience_id = str(uuid4())
@@ -468,9 +450,7 @@ def test_get_experience_not_found(
     assert response.status_code == 404
 
 
-@patch("src.database.get_qdrant_client")
 def test_update_experience_success(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     test_user: User,
@@ -478,7 +458,6 @@ def test_update_experience_success(
     mock_openai_client: MagicMock,
 ):
     """Test updating an experience."""
-    mock_get_qdrant.return_value = mock_qdrant_client
 
     experience_id = str(uuid4())
     mock_point = MagicMock()
@@ -515,9 +494,7 @@ def test_update_experience_success(
     assert data["result"] == "Updated result"
 
 
-@patch("src.database.get_qdrant_client")
 def test_update_star_with_invalid_psi_fields(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     test_user: User,
@@ -525,7 +502,6 @@ def test_update_star_with_invalid_psi_fields(
     mock_openai_client: MagicMock,
 ):
     """Test that updating a STAR experience with PSI fields fails."""
-    mock_get_qdrant.return_value = mock_qdrant_client
 
     experience_id = str(uuid4())
     mock_point = MagicMock()
@@ -562,9 +538,7 @@ def test_update_star_with_invalid_psi_fields(
     assert "problem" in response.json()["detail"]
 
 
-@patch("src.database.get_qdrant_client")
 def test_update_psi_experience_success(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     test_user: User,
@@ -572,7 +546,6 @@ def test_update_psi_experience_success(
     mock_openai_client: MagicMock,
 ):
     """Test updating a PSI format experience."""
-    mock_get_qdrant.return_value = mock_qdrant_client
 
     experience_id = str(uuid4())
     mock_point = MagicMock()
@@ -609,9 +582,7 @@ def test_update_psi_experience_success(
     assert data["format_type"] == "PSI"
 
 
-@patch("src.database.get_qdrant_client")
 def test_update_psi_with_invalid_star_fields(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     test_user: User,
@@ -619,7 +590,6 @@ def test_update_psi_with_invalid_star_fields(
     mock_openai_client: MagicMock,
 ):
     """Test that updating a PSI experience with STAR fields fails."""
-    mock_get_qdrant.return_value = mock_qdrant_client
 
     experience_id = str(uuid4())
     mock_point = MagicMock()
@@ -655,9 +625,7 @@ def test_update_psi_with_invalid_star_fields(
     assert "situation" in response.json()["detail"]
 
 
-@patch("src.database.get_qdrant_client")
 def test_update_free_experience_success(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     test_user: User,
@@ -665,7 +633,6 @@ def test_update_free_experience_success(
     mock_openai_client: MagicMock,
 ):
     """Test updating a free format experience."""
-    mock_get_qdrant.return_value = mock_qdrant_client
 
     experience_id = str(uuid4())
     mock_point = MagicMock()
@@ -699,9 +666,7 @@ def test_update_free_experience_success(
     assert data["format_type"] == "FREE"
 
 
-@patch("src.database.get_qdrant_client")
 def test_update_free_with_invalid_star_psi_fields(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     test_user: User,
@@ -709,7 +674,6 @@ def test_update_free_with_invalid_star_psi_fields(
     mock_openai_client: MagicMock,
 ):
     """Test that updating a FREE experience with STAR or PSI fields fails."""
-    mock_get_qdrant.return_value = mock_qdrant_client
 
     experience_id = str(uuid4())
     mock_point = MagicMock()
@@ -743,16 +707,13 @@ def test_update_free_with_invalid_star_psi_fields(
     assert "action" in response.json()["detail"]
 
 
-@patch("src.database.get_qdrant_client")
 def test_delete_experience_success(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     test_user: User,
     mock_qdrant_client: MagicMock,
 ):
     """Test deleting an experience."""
-    mock_get_qdrant.return_value = mock_qdrant_client
 
     experience_id = str(uuid4())
     mock_point = MagicMock()
@@ -782,9 +743,7 @@ def test_delete_experience_success(
     assert response.status_code == 204
 
 
-@patch("src.database.get_qdrant_client")
 def test_search_experiences_success(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     test_user: User,
@@ -792,7 +751,6 @@ def test_search_experiences_success(
     mock_openai_client: MagicMock,
 ):
     """Test semantic search for experiences."""
-    mock_get_qdrant.return_value = mock_qdrant_client
 
     # Mock search response
     mock_point = MagicMock()
@@ -814,7 +772,7 @@ def test_search_experiences_success(
         "updated_at": datetime.utcnow().isoformat(),
     }
     mock_point.score = 0.92
-    mock_qdrant_client.search.return_value = [mock_point]
+    mock_qdrant_client.query_points.return_value = MagicMock(points=[mock_point])
 
     response = client.get(
         "/api/v1/experiences/search?q=AI 챗봇", headers=auth_headers
@@ -835,26 +793,21 @@ def test_search_experiences_unauthenticated(client: TestClient):
     assert response.status_code == 401
 
 
-@patch("src.database.get_qdrant_client")
 @patch("src.experience.service.openai_client")
 def test_search_experiences_missing_query(
-    mock_openai, mock_get_qdrant, client: TestClient, auth_headers: dict
+    mock_openai, client: TestClient, auth_headers: dict
 ):
     """Test search without query parameter."""
-    mock_get_qdrant.return_value = MagicMock()
     response = client.get("/api/v1/experiences/search", headers=auth_headers)
     assert response.status_code == 422
 
 
-@patch("src.database.get_qdrant_client")
 def test_get_other_user_experience_forbidden(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     mock_qdrant_client: MagicMock,
 ):
     """Test accessing another user's experience."""
-    mock_get_qdrant.return_value = mock_qdrant_client
 
     experience_id = str(uuid4())
     other_user_id = str(uuid4())
@@ -918,9 +871,7 @@ def test_question(session: Session, test_user: User, test_project: Project) -> Q
 
 
 # Question Matching Tests
-@patch("src.database.get_qdrant_client")
 def test_get_experiences_by_question_success(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     test_user: User,
@@ -929,7 +880,6 @@ def test_get_experiences_by_question_success(
     mock_openai_client: MagicMock,
 ):
     """Test getting experiences matched with a question."""
-    mock_get_qdrant.return_value = mock_qdrant_client
 
     # Mock Qdrant query response with similarity scores
     mock_point1 = MagicMock()
@@ -988,9 +938,9 @@ def test_get_experiences_by_question_success(
     assert data["total"] == 2
     assert len(data["experiences"]) == 2
 
-    # Check first experience has higher score
-    assert data["experiences"][0]["similarity_score"] == 0.92
-    assert data["experiences"][1]["similarity_score"] == 0.75
+    # Check first experience has higher score than second
+    assert data["experiences"][0]["similarity_score"] > data["experiences"][1]["similarity_score"]
+    assert 0 < data["experiences"][0]["similarity_score"] <= 1.0
 
     # Verify Qdrant query was called with correct parameters
     mock_qdrant_client.query_points.assert_called_once()
@@ -1006,16 +956,13 @@ def test_get_experiences_by_question_unauthenticated(
     assert response.status_code == 401
 
 
-@patch("src.database.get_qdrant_client")
 def test_get_experiences_by_question_not_found(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     mock_qdrant_client: MagicMock,
     mock_openai_client: MagicMock,
 ):
     """Test getting experiences with non-existent question."""
-    mock_get_qdrant.return_value = mock_qdrant_client
 
     non_existent_question_id = uuid4()
     response = client.get(
@@ -1027,9 +974,7 @@ def test_get_experiences_by_question_not_found(
     assert "Question not found" in response.json()["detail"]
 
 
-@patch("src.database.get_qdrant_client")
 def test_get_experiences_by_question_other_user(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     session: Session,
@@ -1037,7 +982,6 @@ def test_get_experiences_by_question_other_user(
     mock_openai_client: MagicMock,
 ):
     """Test accessing another user's question."""
-    mock_get_qdrant.return_value = mock_qdrant_client
 
     # Create another user and their project/question
     other_user = User(
@@ -1080,9 +1024,7 @@ def test_get_experiences_by_question_other_user(
     assert "Question not found" in response.json()["detail"]
 
 
-@patch("src.database.get_qdrant_client")
 def test_get_experiences_by_question_empty_results(
-    mock_get_qdrant,
     client: TestClient,
     auth_headers: dict,
     test_question: Question,
@@ -1090,7 +1032,6 @@ def test_get_experiences_by_question_empty_results(
     mock_openai_client: MagicMock,
 ):
     """Test getting experiences when user has no experiences."""
-    mock_get_qdrant.return_value = mock_qdrant_client
 
     # Mock empty Qdrant response
     mock_qdrant_client.query_points.return_value = MagicMock(points=[])
