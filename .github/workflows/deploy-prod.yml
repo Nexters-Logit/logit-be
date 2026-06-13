@@ -10,8 +10,43 @@ env:
   DOCKER_IMAGE: logit-server
 
 jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Lint
+        run: uv run ruff check src/
+
+      - name: Test
+        run: uv run pytest tests/ -v --no-cov
+        env:
+          SECRET_KEY: test-secret-key
+          POSTGRES_SERVER: localhost
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+          REDIS_URL: redis://localhost:6379
+          QDRANT_HOST: localhost
+          QDRANT_PORT: "6333"
+          OPENAI_API_KEY: test-key
+
   deploy:
     runs-on: ubuntu-latest
+    needs: lint-and-test
     environment: production  # GitHub Environment로 승인 단계 추가 가능
 
     steps:
