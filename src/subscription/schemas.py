@@ -1,7 +1,6 @@
 """구독 상태 응답 스키마."""
 
 from datetime import datetime
-from uuid import UUID
 
 from pydantic import BaseModel
 

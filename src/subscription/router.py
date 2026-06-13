@@ -12,11 +12,11 @@ from src.common.responses import (
 from src.subscription.usage import UsageLimiter
 from src.users.dependencies import ActiveUser, SessionDep
 
-from .models import Subscription, SubscriptionPlan, SubscriptionType
+from .models import Subscription, SubscriptionType
 from .schemas import PlanStatus, RemainingUsage, SubscriptionStatusResponse
 from .service import (
-    get_all_subscriptions,
     get_active_subscription,
+    get_all_subscriptions,
     get_or_create_mcp_token,
     get_subscription_by_type,
 )
