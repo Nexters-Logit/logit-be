@@ -113,6 +113,9 @@ omit = [
     "*/__init__.py",
 ]
 
+[tool.pyrefly]
+python_interpreter = ".venv/bin/python"
+
 [tool.coverage.report]
 show_missing = true
 sort = "-Cover"
