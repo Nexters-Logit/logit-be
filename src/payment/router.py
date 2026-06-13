@@ -6,9 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_async_db
-from src.users.dependencies import CurrentUser
-
 from src.subscription.models import SubscriptionType
+from src.users.dependencies import CurrentUser
 
 from . import service
 from .schemas import PaymentHistoryItem, PaymentInitiateRequest, PaymentInitiateResponse
@@ -32,10 +31,10 @@ async def initiate_payment(
     try:
         return await service.initiate_payment(session, current_user.id, req)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except RuntimeError as e:
         logger.error("결제 시작 오류: %s", e)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e)) from e
 
 
 @router.get("/history", response_model=list[PaymentHistoryItem])
@@ -67,10 +66,10 @@ async def cancel_subscription(
     try:
         await service.cancel_subscription(session, current_user.id, sub_type)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except Exception as e:
         logger.error("구독 취소 오류: %s", e)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e)) from e
 
 
 @router.post("/webhook")
