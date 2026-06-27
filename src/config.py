@@ -133,6 +133,15 @@ class Settings(BaseSettings):
     PAYAPP_LINKKEY: str | None = None
     PAYAPP_LINKVAL: str | None = None
     PAYAPP_CALLBACK_URL: str = "http://localhost:8000/api/v1/payments/webhook"
+    FRONTEND_URL: str = "http://localhost:3000"
+
+    # 전화번호 암호화 키 (Fernet URL-safe base64 32바이트 키)
+    # 생성: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # 미설정 시 평문 저장 (로컬 개발용)
+    PHONE_ENCRYPTION_KEY: str | None = None
+
+    # Admin internal API secret (어드민 서버에서 내부 API 호출 시 사용)
+    ADMIN_SECRET: str | None = None
 
     # Sentry
     SENTRY_DSN: str | None = None

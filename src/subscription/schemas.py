@@ -14,6 +14,8 @@ class PlanStatus(BaseModel):
     is_auto_renew: bool           # False = 취소 예약됨, 만료일까지만 사용 가능
     started_at: datetime | None
     expires_at: datetime | None
+    amount: int | None            # 현재 플랜 월 결제 금액
+    next_payment_date: datetime | None  # 다음 결제일 (취소 예약 시 None)
 
 
 class RemainingUsage(BaseModel):

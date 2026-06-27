@@ -20,6 +20,9 @@ def upgrade() -> None:
     # free_trial 레코드가 남아 있으면 제거 (구독 레코드 없음 = 프리 티어)
     op.execute("DELETE FROM subscriptions WHERE plan = 'free_trial'")
 
+    # DEFAULT 제거 후 타입 변경 (DEFAULT가 있으면 자동 캐스팅 불가)
+    op.execute("ALTER TABLE subscriptions ALTER COLUMN plan DROP DEFAULT")
+
     # PostgreSQL enum 값 제거: 새 타입 생성 → 컬럼 교체 → 구 타입 삭제
     op.execute("ALTER TYPE subscriptionplan RENAME TO subscriptionplan_old")
     op.execute("CREATE TYPE subscriptionplan AS ENUM ('basic', 'lite', 'pro')")

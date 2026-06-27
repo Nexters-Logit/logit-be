@@ -18,6 +18,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from src.auth import router as auth_router
+from src.banners import router as banners_router
 from src.chats import router as chats_router
 from src.common.slack import send_error_notification
 from src.config import settings
@@ -229,6 +230,11 @@ app.include_router(
     plans_router.router,
     prefix=f"{settings.API_V1_STR}/plans",
     tags=["Plans"],
+)
+app.include_router(
+    banners_router.router,
+    prefix=f"{settings.API_V1_STR}/banners",
+    tags=["Banners"],
 )
 
 @app.get("/")

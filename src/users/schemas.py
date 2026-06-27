@@ -36,6 +36,7 @@ class UserUpdate(BaseModel):
 
     email: str | None = Field(None, description="사용자 이메일")
     full_name: str | None = Field(None, description="사용자 이름")
+    phone: str | None = Field(None, description="결제 알림 전화번호")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -55,6 +56,7 @@ class UserPublic(UserBase):
     profile_image_url: str | None = Field(None, description="프로필 이미지 URL")
     created_at: datetime = Field(..., description="가입 시간")
     is_active: bool = Field(..., description="활성 상태")
+    phone: str | None = Field(None, description="결제 알림 전화번호")
 
     model_config = ConfigDict(
         from_attributes=True,
