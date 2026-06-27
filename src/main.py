@@ -18,12 +18,14 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from src.auth import router as auth_router
+from src.banners import router as banners_router
 from src.chats import router as chats_router
 from src.common.slack import send_error_notification
 from src.config import settings
 from src.database import init_qdrant_collection
 from src.experience import router as experience_router
 from src.payment import router as payment_router
+from src.plans import router as plans_router
 from src.projects import router as projects_router
 from src.questions import router as questions_router
 from src.report import router as report_router
@@ -223,6 +225,16 @@ app.include_router(
     payment_router.router,
     prefix=f"{settings.API_V1_STR}/payments",
     tags=["Payments"],
+)
+app.include_router(
+    plans_router.router,
+    prefix=f"{settings.API_V1_STR}/plans",
+    tags=["Plans"],
+)
+app.include_router(
+    banners_router.router,
+    prefix=f"{settings.API_V1_STR}/banners",
+    tags=["Banners"],
 )
 
 @app.get("/")

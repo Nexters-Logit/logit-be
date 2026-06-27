@@ -38,17 +38,25 @@ def _extract_bearer_token(authorization: str | None) -> str | None:
     return None
 
 
+def _cookie_kwargs() -> dict:
+    """환경별 쿠키 보안 설정을 반환한다."""
+    is_prod = settings.ENVIRONMENT == "production"
+    return {
+        "httponly": True,
+        "secure": is_prod,
+        "samesite": "lax",
+        "domain": ".logit.ai.kr" if is_prod else None,
+        "path": "/",
+    }
+
+
 def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
     """HttpOnly refresh token 쿠키 설정 (웹 전용)."""
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        domain=".logit.ai.kr",
-        path="/",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        **_cookie_kwargs(),
     )
 
 
@@ -56,11 +64,7 @@ def _delete_refresh_cookie(response: Response) -> None:
     """refresh token 쿠키 삭제."""
     response.delete_cookie(
         key="refresh_token",
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        domain=".logit.ai.kr",
-        path="/",
+        **_cookie_kwargs(),
     )
 
 

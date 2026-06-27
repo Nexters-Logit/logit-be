@@ -61,6 +61,11 @@ class PaymentHistoryItem(BaseModel):
     pay_state_label: str | None
     paid_at: datetime | None
     created_at: datetime
+    card_name: str | None
+    card_number: str | None
+    receipt_url: str | None
+    subscription_started_at: datetime | None
+    subscription_expires_at: datetime | None
 
     @classmethod
     def from_record(cls, record: object) -> "PaymentHistoryItem":
@@ -73,4 +78,9 @@ class PaymentHistoryItem(BaseModel):
             pay_state_label=PAY_STATE_LABEL.get(record.pay_state) if record.pay_state else None,
             paid_at=record.paid_at,
             created_at=record.created_at,
+            card_name=record.card_name,
+            card_number=record.card_number,
+            receipt_url=record.receipt_url,
+            subscription_started_at=record.subscription_started_at,
+            subscription_expires_at=record.subscription_expires_at,
         )

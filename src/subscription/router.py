@@ -9,6 +9,7 @@ from src.common.responses import (
     RESPONSES_CRUD_WITH_AUTH,
     create_responses,
 )
+from src.payment.plans import PLANS, plan_key as make_plan_key
 from src.subscription.usage import UsageLimiter
 from src.users.dependencies import ActiveUser, SessionDep
 
@@ -62,7 +63,15 @@ async def get_subscription_status(
                 is_auto_renew=False,
                 started_at=None,
                 expires_at=None,
+                amount=None,
+                next_payment_date=None,
             )
+        amount: int | None = None
+        if sub.plan is not None:
+            plan_info = PLANS.get(make_plan_key(sub_type, sub.plan))
+            if plan_info:
+                amount = plan_info.price
+        next_payment_date = sub.expires_at if (sub.is_active and sub.is_auto_renew) else None
         return PlanStatus(
             subscription_type=sub_type,
             plan=sub.plan,
@@ -70,6 +79,8 @@ async def get_subscription_status(
             is_auto_renew=sub.is_auto_renew,
             started_at=sub.started_at,
             expires_at=sub.expires_at,
+            amount=amount,
+            next_payment_date=next_payment_date,
         )
 
     return SubscriptionStatusResponse(

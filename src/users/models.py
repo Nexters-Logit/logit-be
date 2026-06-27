@@ -4,8 +4,10 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime
+from sqlalchemy import Column, DateTime, String
 from sqlmodel import Field, SQLModel
+
+from src.common.crypto import EncryptedString
 
 
 class OAuthProvider(str, Enum):
@@ -34,6 +36,12 @@ class User(SQLModel, table=True):
     terms_agreed: bool = Field(default=False)
     terms_agreed_at: datetime | None = Field(
         default=None, sa_column=Column(DateTime(timezone=True))
+    )
+
+    # 결제 알림 전화번호 (PayApp recvphone) — Fernet 암호화 저장
+    phone: str | None = Field(
+        default=None,
+        sa_column=Column("phone", EncryptedString(255), nullable=True),
     )
 
     # JWT tokens
