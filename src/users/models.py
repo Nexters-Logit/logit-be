@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, String
+from sqlalchemy import Column, DateTime
 from sqlmodel import Field, SQLModel
 
 from src.common.crypto import EncryptedString

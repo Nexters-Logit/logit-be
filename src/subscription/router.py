@@ -9,7 +9,8 @@ from src.common.responses import (
     RESPONSES_CRUD_WITH_AUTH,
     create_responses,
 )
-from src.payment.plans import PLANS, plan_key as make_plan_key
+from src.payment.plans import PLANS
+from src.payment.plans import plan_key as make_plan_key
 from src.subscription.usage import UsageLimiter
 from src.users.dependencies import ActiveUser, SessionDep
 
