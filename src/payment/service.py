@@ -10,9 +10,10 @@ from sqlmodel import select
 from src.config import settings
 from src.subscription.models import Subscription, SubscriptionPlan, SubscriptionType
 
+from src.plans.models import Plan
 from .models import PaymentRecord, SubscriptionEvent
 from .payapp import cancel_rebill, register_rebill
-from .plans import PLANS, PlanInfo, get_plan, plan_key
+from .plans import plan_key
 from .schemas import PaymentHistoryItem, PaymentInitiateRequest, PaymentInitiateResponse
 
 logger = logging.getLogger(__name__)
@@ -113,9 +114,12 @@ async def initiate_payment(
                 "종료 후 재구독해주세요."
             )
 
-    plan_info: PlanInfo | None = get_plan(req.subscription_type, req.plan)
-    if plan_info is None:
-        raise ValueError(f"지원하지 않는 플랜입니다: {req.subscription_type}:{req.plan}")
+    pkey = plan_key(req.subscription_type, req.plan)
+    db_plan = (await session.execute(
+        select(Plan).where(Plan.id == pkey, Plan.is_active == True)  # noqa: E712
+    )).scalar_one_or_none()
+    if db_plan is None:
+        raise ValueError(f"지원하지 않는 플랜입니다: {pkey}")
 
     # 재구독 시 기존 만료일 기준으로 결제 주기일 설정
     cycle_day: int | None = None
@@ -126,10 +130,10 @@ async def initiate_payment(
         result = await register_rebill(
             userid=settings.PAYAPP_USERID,
             linkkey=settings.PAYAPP_LINKKEY,
-            good_name=plan_info.good_name,
-            price=plan_info.price,
+            good_name=db_plan.name,
+            price=db_plan.price,
             user_id=str(user_id),
-            plan_key=plan_key(req.subscription_type, req.plan),
+            plan_key=pkey,
             feedback_url=settings.PAYAPP_CALLBACK_URL,
             phone=req.phone,
             return_url=f"{settings.FRONTEND_URL}/payment/complete",
@@ -147,9 +151,9 @@ async def initiate_payment(
 
     await _log_event(
         session, user_id, req.subscription_type, "INITIATED",
-        plan=plan_key(req.subscription_type, req.plan),
+        plan=pkey,
         rebill_no=result.get("rebill_no"),
-        amount=plan_info.price,
+        amount=db_plan.price,
         payapp_response=str(result),
         notes="결제 페이지 요청",
     )
@@ -458,17 +462,19 @@ async def _handle_payment_complete(
         return "FAIL"
 
     plan_key_str = form_data.get("var2", "")
-    plan_info = PLANS.get(plan_key_str)
-    if plan_info is None:
+    db_plan = (await session.execute(
+        select(Plan).where(Plan.id == plan_key_str)
+    )).scalar_one_or_none()
+    if db_plan is None:
         logger.error("웹훅 var2(plan_key) 알 수 없음: %s", plan_key_str)
         return "FAIL"
 
     # 금액 검증 (위변조 방지)
     webhook_price_str = form_data.get("price", "")
-    if webhook_price_str and int(webhook_price_str) != plan_info.price:
+    if webhook_price_str and int(webhook_price_str) != db_plan.price:
         logger.warning(
             "웹훅 금액 불일치: expected=%d received=%s rebill_no=%s",
-            plan_info.price, webhook_price_str, rebill_no,
+            db_plan.price, webhook_price_str, rebill_no,
         )
         return "FAIL"
 
@@ -480,7 +486,7 @@ async def _handle_payment_complete(
         user_id=user_id,
         subscription_type=sub_type_str,
         plan=plan_str,
-        amount=plan_info.price,
+        amount=db_plan.price,
         rebill_no=rebill_no,
         mul_no=mul_no,
         pay_state=4,
@@ -504,7 +510,7 @@ async def _handle_payment_complete(
     )
     await session.commit()
 
-    logger.info("결제 완료 처리: user_id=%s plan=%s rebill_no=%s amount=%d", user_id, plan_key_str, rebill_no, plan_info.price)
+    logger.info("결제 완료 처리: user_id=%s plan=%s rebill_no=%s amount=%d", user_id, plan_key_str, rebill_no, db_plan.price)
     return "SUCCESS"
 
 
