@@ -115,6 +115,11 @@ async def initiate_payment(
     if plan_info is None:
         raise ValueError(f"지원하지 않는 플랜입니다: {req.subscription_type}:{req.plan}")
 
+    # 재구독 시 기존 만료일 기준으로 결제 주기일 설정
+    cycle_day: int | None = None
+    if existing_sub and existing_sub.expires_at and existing_sub.expires_at > now:
+        cycle_day = existing_sub.expires_at.day
+
     try:
         result = await register_rebill(
             userid=settings.PAYAPP_USERID,
@@ -126,6 +131,7 @@ async def initiate_payment(
             feedback_url=settings.PAYAPP_CALLBACK_URL,
             phone=req.phone,
             return_url=f"{settings.FRONTEND_URL}/payment/complete",
+            cycle_day=cycle_day,
         )
     except Exception as e:
         logger.error("PayApp API 호출 오류: %s", e)
@@ -560,13 +566,18 @@ async def _activate_subscription(
     sub_type = SubscriptionType(record.subscription_type)
     plan = SubscriptionPlan(record.plan)
     now = datetime.now(timezone.utc)
-    expires = now + timedelta(days=31)
 
     stmt = select(Subscription).where(
         Subscription.user_id == record.user_id,
         Subscription.sub_type == sub_type,
     )
     sub = (await session.execute(stmt)).scalar_one_or_none()
+
+    # 재구독 시 기존 만료일이 남아있으면 만료일 기준으로 연장, 아니면 지금부터 31일
+    if sub is not None and sub.expires_at and sub.expires_at > now:
+        expires = sub.expires_at + timedelta(days=31)
+    else:
+        expires = now + timedelta(days=31)
 
     if sub is None:
         sub = Subscription(
