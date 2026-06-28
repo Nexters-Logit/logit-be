@@ -101,15 +101,17 @@ async def initiate_payment(
         )
     )).scalar_one_or_none()
 
-    if (
-        existing_sub
-        and existing_sub.is_auto_renew
-        and (existing_sub.expires_at is None or existing_sub.expires_at > now)
-    ):
-        raise ValueError(
-            f"이미 자동갱신 중인 {req.subscription_type.value} 구독이 있습니다. "
-            f"만료일: {existing_sub.expires_at.strftime('%Y-%m-%d') if existing_sub.expires_at else '무기한'}"
-        )
+    if existing_sub and existing_sub.is_active:
+        if existing_sub.is_auto_renew and (existing_sub.expires_at is None or existing_sub.expires_at > now):
+            raise ValueError(
+                f"이미 자동갱신 중인 {req.subscription_type.value} 구독이 있습니다. "
+                f"만료일: {existing_sub.expires_at.strftime('%Y-%m-%d') if existing_sub.expires_at else '무기한'}"
+            )
+        if not existing_sub.is_auto_renew and existing_sub.expires_at and existing_sub.expires_at > now:
+            raise ValueError(
+                f"현재 구독이 {existing_sub.expires_at.strftime('%Y년 %m월 %d일')}에 종료됩니다. "
+                "종료 후 재구독해주세요."
+            )
 
     plan_info: PlanInfo | None = get_plan(req.subscription_type, req.plan)
     if plan_info is None:
@@ -573,11 +575,7 @@ async def _activate_subscription(
     )
     sub = (await session.execute(stmt)).scalar_one_or_none()
 
-    # 재구독 시 기존 만료일이 남아있으면 만료일 기준으로 연장, 아니면 지금부터 31일
-    if sub is not None and sub.expires_at and sub.expires_at > now:
-        expires = sub.expires_at + timedelta(days=31)
-    else:
-        expires = now + timedelta(days=31)
+    expires = now + timedelta(days=31)
 
     if sub is None:
         sub = Subscription(
