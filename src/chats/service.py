@@ -121,6 +121,7 @@ async def send_chat_stream(
     )
 
     # 4. AI 응답 스트리밍 (RunnableWithMessageHistory가 DB에서 히스토리 자동 로드)
+    plan_value = (subscription.plan.value if subscription and subscription.plan else None) or "free"
     full_content = ""
     async for chunk_json in generate_ai_response_stream(
         db=db,
@@ -133,6 +134,9 @@ async def send_chat_stream(
         experience_ids=experience_ids,
         qdrant_client=qdrant_client,
         user_id=str(user_id),
+        usage_user_id=user_id,
+        usage_subscription_type="logit",
+        usage_plan=plan_value,
     ):
         chunk_data = json.loads(chunk_json)
 

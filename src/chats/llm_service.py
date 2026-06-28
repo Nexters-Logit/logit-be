@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.ai_usage.callbacks import TokenUsageCallback
 from src.experience.models import Experience, ExperienceFormatType
 from src.experience.service import get_experience
 
@@ -165,14 +166,17 @@ async def classify_request(
     user_message: str,
     question: str,
     provider: LLMProvider,
+    callbacks: list | None = None,
 ) -> RequestClassification:
     """1단계: 요청 분류 + 문항 유형 분류"""
     structured_llm = provider.classification_llm.with_structured_output(RequestClassification)
+    config = {"callbacks": callbacks} if callbacks else {}
     return await structured_llm.ainvoke(
         CLASSIFICATION_PROMPT.format(
             user_message=user_message,
             question=question,
-        )
+        ),
+        config=config,
     )
 
 
@@ -183,6 +187,7 @@ async def generate_draft_text(
     company: str,
     recruit_notice: str | None,
     provider: LLMProvider,
+    callbacks: list | None = None,
 ) -> str:
     """2단계: 경험 기반 초안 생성 (인라인 스토리라인 설계 포함)"""
     experiences_text = _format_experiences_with_roles(experiences)
@@ -196,7 +201,8 @@ async def generate_draft_text(
         experiences=experiences_text,
     )
 
-    response = await provider.writing_llm.ainvoke(prompt)
+    config = {"callbacks": callbacks} if callbacks else {}
+    response = await provider.writing_llm.ainvoke(prompt, config=config)
     return response.content
 
 
@@ -220,6 +226,10 @@ async def generate_ai_response_stream(
     qdrant_client: QdrantClient,
     user_id: str,
     llm_provider: LLMProvider | None = None,
+    # usage logging context (optional)
+    usage_user_id: UUID | None = None,
+    usage_subscription_type: str = "logit",
+    usage_plan: str = "free",
 ) -> AsyncGenerator[str, None]:
     """
     멀티 스텝 AI 응답 스트리밍 생성
@@ -236,6 +246,16 @@ async def generate_ai_response_stream(
         - {"type": "error", "message": "..."} - 에러
     """
     queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+    def _make_cb(endpoint: str) -> list[TokenUsageCallback]:
+        if usage_user_id is None:
+            return []
+        return [TokenUsageCallback(
+            user_id=usage_user_id,
+            subscription_type=usage_subscription_type,
+            plan=usage_plan,
+            endpoint=endpoint,
+        )]
 
     async def _run() -> None:
         """파이프라인 전체를 백그라운드 태스크로 실행, 결과를 queue에 전달"""
@@ -255,6 +275,7 @@ async def generate_ai_response_stream(
                     user_message=user_message,
                     question=question_content,
                     provider=provider,
+                    callbacks=_make_cb("classification"),
                 ),
                 _load_experiences(),
             )
@@ -293,7 +314,8 @@ async def generate_ai_response_stream(
                         "experiences": experiences_text,
                         "input": user_message,
                     },
-                    config={"configurable": {"session_id": str(question_id)}},
+                    config={"configurable": {"session_id": str(question_id)},
+                            "callbacks": _make_cb("chat")},
                 ):
                     content = chunk.content
                     if content:
@@ -316,6 +338,7 @@ async def generate_ai_response_stream(
                     company=company,
                     recruit_notice=recruit_notice,
                     provider=provider,
+                    callbacks=_make_cb("draft"),
                 )
 
                 # 청크 단위 스트리밍 (5자씩, 100ms 간격)

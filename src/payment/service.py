@@ -8,9 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from src.config import settings
+from src.plans.models import Plan
 from src.subscription.models import Subscription, SubscriptionPlan, SubscriptionType
 
-from src.plans.models import Plan
 from .models import PaymentRecord, SubscriptionEvent
 from .payapp import cancel_payment, cancel_rebill, register_rebill
 from .plans import plan_key
@@ -471,12 +471,17 @@ async def _handle_payment_complete(
 
     # 금액 검증 (위변조 방지)
     webhook_price_str = form_data.get("price", "")
-    if webhook_price_str and int(webhook_price_str) != db_plan.price:
-        logger.warning(
-            "웹훅 금액 불일치: expected=%d received=%s rebill_no=%s",
-            db_plan.price, webhook_price_str, rebill_no,
-        )
-        return "FAIL"
+    if webhook_price_str:
+        try:
+            if int(webhook_price_str) != db_plan.price:
+                logger.warning(
+                    "웹훅 금액 불일치: expected=%d received=%s rebill_no=%s",
+                    db_plan.price, webhook_price_str, rebill_no,
+                )
+                return "FAIL"
+        except ValueError:
+            logger.warning("웹훅 price 파싱 불가: %s rebill_no=%s", webhook_price_str, rebill_no)
+            return "FAIL"
 
     sub_type_str, plan_str = plan_key_str.split(":")
     now = datetime.now(timezone.utc)
@@ -494,7 +499,7 @@ async def _handle_payment_complete(
         card_name=form_data.get("card_name"),
         card_number=form_data.get("card_num"),
         receipt_url=form_data.get("csturl"),
-        raw_webhook_data=str(form_data),
+        raw_webhook_data=str({k: v for k, v in form_data.items() if k not in ("userid", "linkkey", "linkval")}),
     )
     session.add(record)
     await _activate_subscription(session, record)
@@ -504,7 +509,7 @@ async def _handle_payment_complete(
         session, user_id, sub_type, "ACTIVATED",
         plan=plan_str,
         rebill_no=rebill_no,
-        amount=plan_info.price,
+        amount=db_plan.price,
         payapp_response=str({k: v for k, v in form_data.items() if k not in ("userid", "linkkey", "linkval")}),
         notes=f"결제 완료. mul_no={mul_no}",
     )
@@ -535,7 +540,7 @@ async def _handle_payment_cancel(
 
     if record is not None:
         record.pay_state = pay_state
-        record.raw_webhook_data = str(form_data)
+        record.raw_webhook_data = str({k: v for k, v in form_data.items() if k not in ("userid", "linkkey", "linkval")})
         session.add(record)
         user_id = record.user_id
         sub_type_str = record.subscription_type
@@ -577,8 +582,9 @@ async def refund_payment(
     - 구독 기간은 유지 (남은 기간 사용 가능)
     - REFUNDED 이벤트 로그
     """
+    # SELECT FOR UPDATE: 동시 요청 시 이중 환불 방지
     record = (await session.execute(
-        select(PaymentRecord).where(PaymentRecord.id == payment_id)
+        select(PaymentRecord).where(PaymentRecord.id == payment_id).with_for_update()
     )).scalar_one_or_none()
 
     if record is None:
