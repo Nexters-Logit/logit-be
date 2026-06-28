@@ -1,6 +1,6 @@
 include:
   - path: docker-compose.infra.yml
-    env_file: .env.dev
+    env_file: .env
 
 services:
   caddy:
@@ -33,7 +33,7 @@ services:
       - ./alembic:/app/alembic
       - ./scripts:/app/scripts
     env_file:
-      - .env.dev
+      - .env
     environment:
       - ENVIRONMENT=dev
       - POSTGRES_SERVER=postgres
