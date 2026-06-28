@@ -62,3 +62,8 @@ class Plan(SQLModel, table=True):
         default=0,
         sa_column=Column(Integer, nullable=False, server_default="0"),
     )
+    show_on_mobile: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, server_default="true"),
+        description="모바일에서 노출 여부",
+    )
