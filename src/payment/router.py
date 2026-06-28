@@ -105,6 +105,29 @@ async def admin_deactivate_subscription(
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e)) from e
 
 
+@router.post("/internal/payments/{payment_id}/refund", status_code=status.HTTP_204_NO_CONTENT, include_in_schema=False)
+async def admin_refund_payment(
+    payment_id: UUID,
+    x_admin_secret: str | None = Header(None, alias="X-Admin-Secret"),
+    session: AsyncSession = Depends(get_async_db),
+) -> None:
+    """
+    어드민 전용 — 단건 결제 환불.
+    구독 기간은 유지된다 (남은 기간 사용 가능).
+    X-Admin-Secret 헤더 필수.
+    """
+    if not settings.ADMIN_SECRET or x_admin_secret != settings.ADMIN_SECRET:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+
+    try:
+        await service.refund_payment(session, payment_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except RuntimeError as e:
+        logger.error("어드민 환불 오류: %s", e)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e)) from e
+
+
 @router.post("/webhook")
 async def payment_webhook(
     request: Request,

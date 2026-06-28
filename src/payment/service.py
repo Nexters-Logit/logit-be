@@ -12,7 +12,7 @@ from src.subscription.models import Subscription, SubscriptionPlan, Subscription
 
 from src.plans.models import Plan
 from .models import PaymentRecord, SubscriptionEvent
-from .payapp import cancel_rebill, register_rebill
+from .payapp import cancel_payment, cancel_rebill, register_rebill
 from .plans import plan_key
 from .schemas import PaymentHistoryItem, PaymentInitiateRequest, PaymentInitiateResponse
 
@@ -562,6 +562,64 @@ async def _handle_payment_cancel(
     await session.commit()
     logger.info("취소·환불 처리 완료: rebill_no=%s pay_state=%s(%s)", rebill_no, pay_state, label)
     return "SUCCESS"
+
+
+async def refund_payment(
+    session: AsyncSession,
+    payment_id: UUID,
+    admin_notes: str = "관리자 환불",
+) -> None:
+    """
+    어드민이 단건 결제를 환불한다.
+
+    - PayApp cancel 호출로 즉시 환불
+    - PaymentRecord.pay_state = 9(환불)로 업데이트
+    - 구독 기간은 유지 (남은 기간 사용 가능)
+    - REFUNDED 이벤트 로그
+    """
+    record = (await session.execute(
+        select(PaymentRecord).where(PaymentRecord.id == payment_id)
+    )).scalar_one_or_none()
+
+    if record is None:
+        raise ValueError("결제 기록을 찾을 수 없습니다.")
+    if record.pay_state != 4:
+        raise ValueError(f"완료 상태(4)인 결제만 환불 가능합니다. 현재 pay_state={record.pay_state}")
+    if not record.mul_no:
+        raise RuntimeError("PayApp 거래번호(mul_no)가 없어 환불할 수 없습니다.")
+
+    if not settings.PAYAPP_USERID or not settings.PAYAPP_LINKKEY:
+        raise RuntimeError("PayApp credentials are not configured.")
+
+    try:
+        result = await cancel_payment(
+            userid=settings.PAYAPP_USERID,
+            linkkey=settings.PAYAPP_LINKKEY,
+            mul_no=record.mul_no,
+        )
+    except Exception as e:
+        logger.error("PayApp 환불 오류: payment_id=%s mul_no=%s error=%s", payment_id, record.mul_no, e)
+        raise RuntimeError(f"PayApp 연결 오류: {e}") from e
+
+    if result.get("state") != "1":
+        errno = result.get("errno", "")
+        errmsg = result.get("errorMessage", "알 수 없는 오류")
+        logger.error("PayApp 환불 실패: payment_id=%s errno=%s msg=%s result=%s", payment_id, errno, errmsg, result)
+        raise RuntimeError(f"PayApp 환불 실패 (errno={errno}): {errmsg}")
+
+    record.pay_state = 9
+    session.add(record)
+
+    await _log_event(
+        session, record.user_id, SubscriptionType(record.subscription_type), "REFUNDED",
+        plan=record.plan,
+        rebill_no=record.rebill_no,
+        amount=record.amount,
+        payapp_response=str(result),
+        notes=f"{admin_notes}. mul_no={record.mul_no}",
+    )
+    await session.commit()
+    logger.info("환불 완료: payment_id=%s mul_no=%s amount=%d", payment_id, record.mul_no, record.amount)
 
 
 async def _activate_subscription(

@@ -117,3 +117,36 @@ async def cancel_rebill(
         resp.raise_for_status()
 
     return _parse_response(resp.text)
+
+
+async def cancel_payment(
+    *,
+    userid: str,
+    linkkey: str,
+    mul_no: str,
+) -> dict[str, str]:
+    """
+    PayApp cancel 호출 — 단건 결제를 취소/환불한다.
+
+    Args:
+        mul_no: PayApp 거래번호 (결제 완료 웹훅의 mul_no)
+
+    Returns:
+        PayApp 응답 dict. 성공 시 state='1'.
+    """
+    payload = {
+        "cmd": "cancel",
+        "userid": userid,
+        "linkkey": linkkey,
+        "mul_no": mul_no,
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            PAYAPP_API_URL,
+            data=payload,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        resp.raise_for_status()
+
+    return _parse_response(resp.text)
