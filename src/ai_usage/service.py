@@ -16,7 +16,7 @@ async def _write_log(user_id: UUID, subscription_type: str, plan: str,
     try:
         async with async_session_factory() as session:
             session.add(AIUsageLog(
-                user_id=user_id,
+                user_id=str(user_id),
                 subscription_type=subscription_type,
                 plan=plan,
                 endpoint=endpoint,
@@ -25,8 +25,9 @@ async def _write_log(user_id: UUID, subscription_type: str, plan: str,
                 output_tokens=output_tokens,
             ))
             await session.commit()
+        logger.info("AI usage logged: endpoint=%s input=%s output=%s", endpoint, input_tokens, output_tokens)
     except Exception as e:
-        logger.warning("AI usage log 기록 실패 (무시): %s", e)
+        logger.error("AI usage log 기록 실패: %s", e, exc_info=True)
 
 
 def log_usage(
