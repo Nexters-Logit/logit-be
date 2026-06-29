@@ -226,10 +226,7 @@ async def generate_ai_response_stream(
     qdrant_client: QdrantClient,
     user_id: str,
     llm_provider: LLMProvider | None = None,
-    # usage logging context (optional)
     usage_user_id: UUID | None = None,
-    usage_subscription_type: str = "logit",
-    usage_plan: str = "free",
 ) -> AsyncGenerator[str, None]:
     """
     멀티 스텝 AI 응답 스트리밍 생성
@@ -252,8 +249,8 @@ async def generate_ai_response_stream(
             return []
         return [TokenUsageCallback(
             user_id=usage_user_id,
-            subscription_type=usage_subscription_type,
-            plan=usage_plan,
+            subscription_type="logit",
+            plan="unknown",
             endpoint=endpoint,
         )]
 

@@ -163,12 +163,19 @@ async def _generate_tokens_for_user(
     session: AsyncSession, user: User, is_new_user: bool
 ) -> dict:
     """사용자에 대한 JWT 토큰 생성 및 DB 저장."""
+    from src.tokens.service import ensure_monthly_tokens, grant_signup_bonus
+
     access_token = create_access_token(subject=str(user.id))
     refresh_token = create_refresh_token(subject=str(user.id))
 
     await user_service.update_refresh_token(
         session=session, db_user=user, refresh_token=refresh_token
     )
+
+    # 신규 가입: 가입 보너스(50토큰) + 첫 달 월 토큰 지급
+    if is_new_user:
+        await grant_signup_bonus(session, user.id)
+        await ensure_monthly_tokens(session, user.id, subscription=None)
 
     return {
         "is_new_user": is_new_user,

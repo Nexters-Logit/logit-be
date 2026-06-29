@@ -10,8 +10,7 @@ from sqlmodel import select
 from src.exceptions import ForbiddenError
 from src.projects.models import Project
 from src.questions.models import Question
-from src.subscription.models import Subscription
-from src.subscription.usage import UsageLimiter
+from src.tokens.service import InsufficientTokensError, debit_chat, debit_draft, get_balance
 
 from .llm_service import generate_ai_response_stream
 from .models import Chat, ChatRole
@@ -89,8 +88,6 @@ async def send_chat_stream(
     content: str,
     experience_ids: list[str] | None = None,
     user_id: UUID,
-    usage_limiter: UsageLimiter | None = None,
-    subscription: Subscription | None = None,
     is_test_user: bool = False,
 ) -> AsyncGenerator[str, None]:
     """메시지 전송 및 AI 응답 스트리밍"""
@@ -120,8 +117,7 @@ async def send_chat_stream(
         experience_ids=experience_ids,
     )
 
-    # 4. AI 응답 스트리밍 (RunnableWithMessageHistory가 DB에서 히스토리 자동 로드)
-    plan_value = (subscription.plan.value if subscription and subscription.plan else None) or "free"
+    # 4. AI 응답 스트리밍
     full_content = ""
     async for chunk_json in generate_ai_response_stream(
         db=db,
@@ -135,8 +131,6 @@ async def send_chat_stream(
         qdrant_client=qdrant_client,
         user_id=str(user_id),
         usage_user_id=user_id,
-        usage_subscription_type="logit",
-        usage_plan=plan_value,
     ):
         chunk_data = json.loads(chunk_json)
 
@@ -148,19 +142,9 @@ async def send_chat_stream(
             yield f"data: {chunk_json}\n\n"
 
         elif chunk_data["type"] == "done":
-            # 5. is_draft는 llm_service 파이프라인 분기에서 결정됨
             is_draft = chunk_data.get("is_draft", False)
 
-            # 6. 초안 한도 체크 및 카운트 (테스트 유저 면제)
-            draft_limit_exceeded = False
-            if usage_limiter and is_draft and not is_test_user:
-                draft_ok, _ = await usage_limiter.check_draft(user_id, subscription)
-                if draft_ok:
-                    await usage_limiter.increment_draft(user_id, subscription)
-                else:
-                    draft_limit_exceeded = True
-
-            # 7. AI 메시지 저장
+            # 5. AI 메시지 저장
             ai_chat = await create_assistant_chat(
                 db=db,
                 question=question,
@@ -169,21 +153,27 @@ async def send_chat_stream(
                 experience_ids=experience_ids,
             )
 
-            # 8. 채팅 횟수 증가 및 남은 횟수 응답 (테스트 유저 면제)
+            # 6. 토큰 차감 (테스트 유저 면제)
+            remaining_balance: int | None = None
+            draft_limit_exceeded = False
+            if not is_test_user:
+                try:
+                    if is_draft:
+                        remaining_balance = await debit_draft(db, user_id)
+                    else:
+                        remaining_balance = await debit_chat(db, user_id)
+                    await db.commit()
+                except InsufficientTokensError as e:
+                    draft_limit_exceeded = is_draft
+                    remaining_balance = e.current
+
             done_data: dict = {
                 "type": "done",
                 "chat_id": str(ai_chat.id),
                 "is_draft": is_draft,
                 "draft_limit_exceeded": draft_limit_exceeded,
+                "token_balance": remaining_balance,
             }
-            if usage_limiter and not is_test_user:
-                await usage_limiter.increment_chat(user_id, subscription)
-                remaining = await usage_limiter.get_remaining(user_id, subscription)
-                done_data["remaining_chats"] = remaining["chat"]
-                done_data["remaining_drafts"] = remaining["draft"]
-            else:
-                done_data["remaining_chats"] = None  # 무제한
-                done_data["remaining_drafts"] = None
             yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
 
         elif chunk_data["type"] == "error":

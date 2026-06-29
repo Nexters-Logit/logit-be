@@ -44,6 +44,10 @@ class User(SQLModel, table=True):
         sa_column=Column("phone", EncryptedString(255), nullable=True),
     )
 
+    # 친구 초대
+    referral_code: str | None = Field(default=None, max_length=20, unique=True)
+    referred_by_user_id: str | None = Field(default=None, max_length=36)
+
     # JWT tokens
     refresh_token: str | None = Field(default=None)
 
