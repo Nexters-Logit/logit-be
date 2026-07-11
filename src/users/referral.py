@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-import random
+import secrets
 import string
 from uuid import UUID
 
@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.tokens.constants import REFERRAL_TOKENS
 from src.tokens.models import TokenTransactionType
-from src.tokens.service import credit
+from src.tokens.service import credit, credit_referral_inviter
 
 from .models import User
 
@@ -23,7 +23,7 @@ _CODE_LENGTH = 8
 
 
 def _generate_code() -> str:
-    return "LOGIT-" + "".join(random.choices(_CODE_CHARS, k=_CODE_LENGTH))
+    return "LOGIT-" + "".join(secrets.choice(_CODE_CHARS) for _ in range(_CODE_LENGTH))
 
 
 async def get_or_create_referral_code(session: AsyncSession, user: User) -> str:
@@ -68,19 +68,20 @@ async def apply_referral_code(
     if inviter.id == invitee_user.id:
         return {"success": False, "reason": "self_referral"}
 
-    invitee_user.referred_by_user_id = str(inviter.id)
-    session.add(invitee_user)
+    try:
+        invitee_user.referred_by_user_id = str(inviter.id)
+        session.add(invitee_user)
 
-    await credit(
-        session, inviter.id, REFERRAL_TOKENS,
-        TokenTransactionType.REFERRAL_INVITER,
-        f"친구 초대 보상 ({invitee_user.email})",
-    )
-    await credit(
-        session, invitee_user.id, REFERRAL_TOKENS,
-        TokenTransactionType.REFERRAL_INVITEE,
-        f"초대 코드 입력 보상 ({inviter.email})",
-    )
+        await credit_referral_inviter(session, inviter.id, REFERRAL_TOKENS)
+        await credit(
+            session, invitee_user.id, REFERRAL_TOKENS,
+            TokenTransactionType.REFERRAL_INVITEE,
+            f"초대 코드 입력 보상 (inviter:{inviter.id})",
+        )
+    except Exception:
+        await session.rollback()
+        logger.exception("Referral credit failed: inviter=%s invitee=%s", inviter.id, invitee_user.id)
+        raise
 
     logger.info(
         "Referral applied: inviter=%s invitee=%s tokens=%d",

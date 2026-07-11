@@ -9,7 +9,6 @@ from sqlmodel import Session
 
 from src.security import create_access_token
 from src.tokens.constants import (
-    ATTENDANCE_TOKENS,
     CHAT_TOKEN_COST,
     DRAFT_TOKEN_COST,
     PLAN_MONTHLY_TOKENS,
@@ -61,43 +60,6 @@ def test_get_balance_monthly_grant_not_doubled(client: TestClient, session: Sess
     resp1 = client.get("/api/v1/tokens/balance", headers=auth_header(token))
     resp2 = client.get("/api/v1/tokens/balance", headers=auth_header(token))
     assert resp1.json()["balance"] == resp2.json()["balance"]
-
-
-# ── 출석 이벤트 ───────────────────────────────────────────────────
-
-def test_attendance_check_in_success(client: TestClient, session: Session) -> None:
-    """처음 출석 시 토큰이 지급돼야 한다."""
-    _, token = make_user(session)
-    # 먼저 잔액 조회(월 토큰 초기화)
-    client.get("/api/v1/tokens/balance", headers=auth_header(token))
-
-    resp = client.post("/api/v1/tokens/attendance", headers=auth_header(token))
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["success"] is True
-    assert data["tokens_earned"] == ATTENDANCE_TOKENS
-
-
-def test_attendance_duplicate_rejected(client: TestClient, session: Session) -> None:
-    """같은 날 두 번 출석하면 409를 반환해야 한다."""
-    _, token = make_user(session)
-    client.post("/api/v1/tokens/attendance", headers=auth_header(token))
-    resp = client.post("/api/v1/tokens/attendance", headers=auth_header(token))
-    assert resp.status_code == 409
-
-
-def test_attendance_event_ended(client: TestClient, session: Session, monkeypatch) -> None:
-    """이벤트 풀이 소진되면 410을 반환해야 한다."""
-    from src.tokens import service as token_service
-
-    async def mock_remaining(*args, **kwargs):
-        return 0
-
-    monkeypatch.setattr(token_service, "_attendance_event_remaining", mock_remaining)
-
-    _, token = make_user(session)
-    resp = client.post("/api/v1/tokens/attendance", headers=auth_header(token))
-    assert resp.status_code == 410
 
 
 # ── 친구 초대 ────────────────────────────────────────────────────
@@ -179,6 +141,25 @@ def test_apply_invalid_code(client: TestClient, session: Session) -> None:
         json={"code": "LOGIT-INVALID"},
     )
     assert resp.status_code == 404
+
+
+def test_referral_reward_notification_claimed_once(client: TestClient, session: Session) -> None:
+    """초대자는 초대 성공 후 다음 잔액 조회에서 딱 1회만 보상 알림을 받는다."""
+    _, inviter_token = make_user(session, "notif_inviter@example.com")
+    _, invitee_token = make_user(session, "notif_invitee@example.com")
+
+    code = client.get("/api/v1/users/referral", headers=auth_header(inviter_token)).json()["code"]
+    client.post("/api/v1/users/referral/apply", headers=auth_header(invitee_token), json={"code": code})
+
+    first = client.get("/api/v1/tokens/balance", headers=auth_header(inviter_token)).json()
+    assert first["referral_reward_received"] is True
+    assert first["referral_reward_amount"] == REFERRAL_TOKENS
+    assert first["referral_reward_count"] == 1
+
+    second = client.get("/api/v1/tokens/balance", headers=auth_header(inviter_token)).json()
+    assert second["referral_reward_received"] is False
+    assert second["referral_reward_amount"] == 0
+    assert second["referral_reward_count"] == 0
 
 
 # ── 초대 현황 ────────────────────────────────────────────────────
