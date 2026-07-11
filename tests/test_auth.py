@@ -1,11 +1,13 @@
 """Tests for auth domain."""
 
+from urllib.parse import parse_qs, urlparse
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from src.security import create_access_token, create_refresh_token
+from src.tokens.models import AttendanceLog, TokenTransaction, TokenTransactionType
 from src.users.models import OAuthProvider, User
 
 
@@ -124,6 +126,110 @@ async def test_google_callback_existing_user(
     location = response.headers["location"]
     assert "error" not in location
     assert "code=" in location
+
+
+def _exchange_temp_code(client: TestClient, redirect_location: str) -> dict:
+    """콜백 리디렉션 URL에서 임시 코드를 추출해 /auth/token으로 교환한다."""
+    temp_code = parse_qs(urlparse(redirect_location).query)["code"][0]
+    resp = client.post(
+        "/api/v1/auth/token",
+        json={"code": temp_code, "platform": "web"},
+    )
+    assert resp.status_code == 200
+    return resp.json()
+
+
+@patch("src.auth.router._verify_oauth_state", return_value=None)
+@patch("src.auth.service.httpx.AsyncClient.post")
+@patch("src.auth.service.httpx.AsyncClient.get")
+def test_login_auto_checkin_attendance(
+    mock_get: AsyncMock,
+    mock_post: AsyncMock,
+    mock_verify_state: AsyncMock,
+    client: TestClient,
+    session: Session,
+) -> None:
+    """하루 첫 로그인 시 출석 이벤트가 자동으로 체크인되고 토큰이 지급돼야 한다."""
+    mock_post.return_value = AsyncMock(
+        status_code=200,
+        json=lambda: {"access_token": "google_access_token"},
+    )
+    mock_get.return_value = AsyncMock(
+        status_code=200,
+        json=lambda: {
+            "email": "attendance@gmail.com",
+            "name": "Attendance User",
+            "id": "google_attendance",
+            "picture": None,
+        },
+    )
+
+    response = client.get(
+        "/api/v1/auth/google/callback?code=test_auth_code&state=test_state",
+        follow_redirects=False,
+    )
+    data = _exchange_temp_code(client, response.headers["location"])
+    assert data["attendance_amount"] == 3
+
+    session.expire_all()
+    user = session.query(User).filter(User.email == "attendance@gmail.com").first()
+    assert user is not None
+    attendance_log = (
+        session.query(AttendanceLog).filter(AttendanceLog.user_id == user.id).first()
+    )
+    assert attendance_log is not None
+    attendance_tx = (
+        session.query(TokenTransaction)
+        .filter(
+            TokenTransaction.user_id == user.id,
+            TokenTransaction.type == TokenTransactionType.ATTENDANCE,
+        )
+        .first()
+    )
+    assert attendance_tx is not None
+    assert attendance_tx.amount == 3
+
+
+@patch("src.auth.router._verify_oauth_state", return_value=None)
+@patch("src.auth.service.httpx.AsyncClient.post")
+@patch("src.auth.service.httpx.AsyncClient.get")
+def test_login_auto_checkin_attendance_second_login_same_day(
+    mock_get: AsyncMock,
+    mock_post: AsyncMock,
+    mock_verify_state: AsyncMock,
+    client: TestClient,
+    session: Session,
+) -> None:
+    """같은 날 두 번째 로그인에서는 출석 토큰이 중복 지급되지 않아야 한다."""
+    mock_post.return_value = AsyncMock(
+        status_code=200,
+        json=lambda: {"access_token": "google_access_token"},
+    )
+    mock_get.return_value = AsyncMock(
+        status_code=200,
+        json=lambda: {
+            "email": "twice@gmail.com",
+            "name": "Twice User",
+            "id": "google_twice",
+            "picture": None,
+        },
+    )
+
+    first = client.get(
+        "/api/v1/auth/google/callback?code=test_auth_code&state=test_state",
+        follow_redirects=False,
+    )
+    first_data = _exchange_temp_code(client, first.headers["location"])
+    assert first_data["attendance_amount"] == 3
+
+    second = client.get(
+        "/api/v1/auth/google/callback?code=test_auth_code&state=test_state",
+        follow_redirects=False,
+    )
+    second_data = _exchange_temp_code(client, second.headers["location"])
+    assert second_data["attendance_amount"] == 0
+    # 로그인 자체는 계속 성공해야 한다
+    assert second_data["access_token"]
 
 
 def test_refresh_token_success(client: TestClient, session: Session) -> None:
