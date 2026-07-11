@@ -7,8 +7,8 @@ from src.config import settings
 from src.experience.dependencies import QdrantDep
 from src.subscription.models import SubscriptionType
 from src.subscription.service import get_active_subscription
-from src.tokens.constants import CHAT_TOKEN_COST
-from src.tokens.service import InsufficientTokensError, ensure_monthly_tokens, get_balance
+from src.tokens.constants import DRAFT_TOKEN_COST
+from src.tokens.service import ensure_monthly_tokens
 from src.users.dependencies import ActiveUser, SessionDep
 
 from .schemas import ChatHistoryResponse, ChatRequest
@@ -40,14 +40,14 @@ async def send_chat(
         subscription = await get_active_subscription(
             session, current_user.id, SubscriptionType.LOGIT
         )
-        await ensure_monthly_tokens(session, current_user.id, subscription)
+        _, _, token = await ensure_monthly_tokens(session, current_user.id, subscription)
         await session.commit()
 
-        balance = await get_balance(session, current_user.id)
-        if balance < CHAT_TOKEN_COST:
+        balance = token.balance
+        if balance < DRAFT_TOKEN_COST:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail={"message": "토큰이 부족합니다.", "balance": balance, "required": CHAT_TOKEN_COST},
+                detail={"message": "토큰이 부족합니다.", "balance": balance, "required": DRAFT_TOKEN_COST},
             )
 
     return StreamingResponse(
@@ -93,10 +93,10 @@ async def get_chat_messages(
     subscription = await get_active_subscription(
         session, current_user.id, SubscriptionType.LOGIT
     )
-    await ensure_monthly_tokens(session, current_user.id, subscription)
+    _, _, token = await ensure_monthly_tokens(session, current_user.id, subscription)
     await session.commit()
 
-    balance = await get_balance(session, current_user.id)
+    balance = token.balance
 
     response = await get_chat_history_response(
         session, question_id, current_user.id,

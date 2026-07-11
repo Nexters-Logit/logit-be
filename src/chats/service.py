@@ -10,7 +10,10 @@ from sqlmodel import select
 from src.exceptions import ForbiddenError
 from src.projects.models import Project
 from src.questions.models import Question
-from src.tokens.service import InsufficientTokensError, debit_chat, debit_draft, get_balance
+from src.tokens.constants import CHAT_TOKEN_COST, DRAFT_TOKEN_COST
+from src.tokens.models import TokenTransactionType
+from src.tokens.exceptions import InsufficientTokensError
+from src.tokens.service import credit, debit
 
 from .llm_service import generate_ai_response_stream
 from .models import Chat, ChatRole
@@ -109,7 +112,28 @@ async def send_chat_stream(
         yield f"data: {json.dumps({'type': 'error', 'message': 'Project not found'}, ensure_ascii=False)}\n\n"
         return
 
-    # 3. 사용자 메시지 저장
+    # 3. 선차감 — 최대 비용(초안 10토큰) 기준, 테스트 유저 면제
+    # is_draft는 스트리밍 끝에 확정되므로 보수적으로 최대 비용을 먼저 차감한다.
+    prededucted_balance: int | None = None
+    if not is_test_user:
+        try:
+            prededucted_balance = await debit(
+                db, user_id, DRAFT_TOKEN_COST,
+                TokenTransactionType.DRAFT_USAGE, "선차감 (채팅/초안)"
+            )
+            await db.commit()
+        except InsufficientTokensError as e:
+            done_data: dict = {
+                "type": "done",
+                "chat_id": None,
+                "is_draft": False,
+                "draft_limit_exceeded": False,
+                "token_balance": e.current,
+            }
+            yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
+            return
+
+    # 4. 사용자 메시지 저장 (토큰 차감 확정 후)
     await create_user_chat(
         db=db,
         question=question,
@@ -117,67 +141,91 @@ async def send_chat_stream(
         experience_ids=experience_ids,
     )
 
-    # 4. AI 응답 스트리밍
+    # 5. AI 응답 스트리밍
     full_content = ""
-    async for chunk_json in generate_ai_response_stream(
-        db=db,
-        question_id=question_id,
-        user_message=content,
-        question_content=question.question,
-        max_length=question.max_length,
-        company=project.company,
-        recruit_notice=project.recruit_notice,
-        experience_ids=experience_ids,
-        qdrant_client=qdrant_client,
-        user_id=str(user_id),
-        usage_user_id=user_id,
-    ):
-        chunk_data = json.loads(chunk_json)
+    try:
+        async for chunk_json in generate_ai_response_stream(
+            db=db,
+            question_id=question_id,
+            user_message=content,
+            question_content=question.question,
+            max_length=question.max_length,
+            company=project.company,
+            recruit_notice=project.recruit_notice,
+            experience_ids=experience_ids,
+            qdrant_client=qdrant_client,
+            user_id=str(user_id),
+            usage_user_id=user_id,
+        ):
+            chunk_data = json.loads(chunk_json)
 
-        if chunk_data["type"] == "ping":
-            yield f"data: {chunk_json}\n\n"
+            if chunk_data["type"] == "ping":
+                yield f"data: {chunk_json}\n\n"
 
-        elif chunk_data["type"] == "content":
-            full_content += chunk_data["content"]
-            yield f"data: {chunk_json}\n\n"
+            elif chunk_data["type"] == "content":
+                full_content += chunk_data["content"]
+                yield f"data: {chunk_json}\n\n"
 
-        elif chunk_data["type"] == "done":
-            is_draft = chunk_data.get("is_draft", False)
+            elif chunk_data["type"] == "done":
+                is_draft = chunk_data.get("is_draft", False)
+                actual_cost = DRAFT_TOKEN_COST if is_draft else CHAT_TOKEN_COST
 
-            # 5. AI 메시지 저장
-            ai_chat = await create_assistant_chat(
-                db=db,
-                question=question,
-                content=full_content,
-                is_draft=is_draft,
-                experience_ids=experience_ids,
-            )
-
-            # 6. 토큰 차감 (테스트 유저 면제)
-            remaining_balance: int | None = None
-            draft_limit_exceeded = False
-            if not is_test_user:
-                try:
-                    if is_draft:
-                        remaining_balance = await debit_draft(db, user_id)
+                # 실제 비용 확정 후 차액 환불 (채팅이면 10 - 5 = 5토큰 환불)
+                remaining_balance: int | None = None
+                if not is_test_user:
+                    refund_amount = DRAFT_TOKEN_COST - actual_cost
+                    if refund_amount > 0:
+                        remaining_balance = await credit(
+                            db, user_id, refund_amount,
+                            TokenTransactionType.CHAT_REFUND,
+                            "채팅 비용 조정 (선차감 차액 환불)"
+                        )
                     else:
-                        remaining_balance = await debit_chat(db, user_id)
-                    await db.commit()
-                except InsufficientTokensError as e:
-                    draft_limit_exceeded = is_draft
-                    remaining_balance = e.current
+                        remaining_balance = prededucted_balance  # 초안, 차액 없음
 
-            done_data: dict = {
-                "type": "done",
-                "chat_id": str(ai_chat.id),
-                "is_draft": is_draft,
-                "draft_limit_exceeded": draft_limit_exceeded,
-                "token_balance": remaining_balance,
-            }
-            yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
+                # AI 메시지 저장 (환불 포함 한 번에 commit)
+                ai_chat = await create_assistant_chat(
+                    db=db,
+                    question=question,
+                    content=full_content,
+                    is_draft=is_draft,
+                    experience_ids=experience_ids,
+                )
 
-        elif chunk_data["type"] == "error":
-            yield f"data: {chunk_json}\n\n"
+                done_data = {
+                    "type": "done",
+                    "chat_id": str(ai_chat.id),
+                    "is_draft": is_draft,
+                    "draft_limit_exceeded": False,
+                    "token_balance": remaining_balance,
+                    "tokens_used": 0 if is_test_user else actual_cost,
+                }
+                yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
+
+            elif chunk_data["type"] == "error":
+                # llm_service가 내부에서 예외를 삼키고 "error" 청크로 변환해 보내므로,
+                # 여기서도 아래 except 블록과 동일하게 선차감분을 환불해야 한다.
+                await _refund_prededuction(db, user_id, is_test_user)
+                yield f"data: {chunk_json}\n\n"
+
+    except Exception:
+        # AI 스트리밍 실패 → 선차감 전액 환불
+        await _refund_prededuction(db, user_id, is_test_user)
+        raise
+
+
+async def _refund_prededuction(db: AsyncSession, user_id: UUID, is_test_user: bool) -> None:
+    """AI 응답 실패 시 선차감된 토큰(최대 비용)을 전액 환불한다."""
+    if is_test_user:
+        return
+    try:
+        await credit(
+            db, user_id, DRAFT_TOKEN_COST,
+            TokenTransactionType.CHAT_REFUND, "AI 오류 전액 환불"
+        )
+        await db.commit()
+    except Exception:
+        logger.exception("환불 실패: user_id=%s amount=%d", user_id, DRAFT_TOKEN_COST)
 
 
 async def get_chat_history_by_question(
