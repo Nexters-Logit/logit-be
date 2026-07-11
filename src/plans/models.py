@@ -32,6 +32,11 @@ class Plan(SQLModel, table=True):
         sa_column=Column(Integer, nullable=False),
         description="할인가 (실제 결제 금액)",
     )
+    monthly_tokens: int = Field(
+        default=0,
+        sa_column=Column(Integer, nullable=False, server_default="0"),
+        description="이 플랜의 월 토큰 제공량",
+    )
     description: str | None = Field(
         default=None,
         sa_column=Column(Text, nullable=True),

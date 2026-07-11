@@ -10,6 +10,7 @@ class PlanResponse(BaseModel):
     name: str
     original_price: int
     price: int
+    monthly_tokens: int
     description: str | None
     badge: str | None
     features: list[str] | None
@@ -26,6 +27,7 @@ class PlanResponse(BaseModel):
             name=plan.name,
             original_price=plan.original_price,
             price=plan.price,
+            monthly_tokens=plan.monthly_tokens,
             description=plan.description,
             badge=plan.badge,
             features=plan.features,
