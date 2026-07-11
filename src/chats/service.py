@@ -11,8 +11,8 @@ from src.exceptions import ForbiddenError
 from src.projects.models import Project
 from src.questions.models import Question
 from src.tokens.constants import CHAT_TOKEN_COST, DRAFT_TOKEN_COST
-from src.tokens.models import TokenTransactionType
 from src.tokens.exceptions import InsufficientTokensError
+from src.tokens.models import TokenTransactionType
 from src.tokens.service import credit, debit
 
 from .llm_service import generate_ai_response_stream

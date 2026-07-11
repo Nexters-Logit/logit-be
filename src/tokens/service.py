@@ -11,9 +11,8 @@ from redis.asyncio import Redis
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.subscription.models import Subscription, SubscriptionPlan
+from src.subscription.models import Subscription
 
-from .exceptions import InsufficientTokensError
 from .constants import (
     ATTENDANCE_EVENT_TOTAL_POOL,
     ATTENDANCE_TOKENS,
@@ -22,6 +21,7 @@ from .constants import (
     PLAN_MONTHLY_TOKENS,
     SIGNUP_BONUS_TOKENS,
 )
+from .exceptions import InsufficientTokensError
 from .models import AttendanceLog, TokenTransaction, TokenTransactionType, UserToken
 
 logger = logging.getLogger(__name__)

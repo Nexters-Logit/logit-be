@@ -7,7 +7,7 @@ from src.config import settings
 from src.experience.dependencies import QdrantDep
 from src.subscription.models import SubscriptionType
 from src.subscription.service import get_active_subscription
-from src.tokens.constants import DRAFT_TOKEN_COST
+from src.tokens.constants import CHAT_TOKEN_COST, DRAFT_TOKEN_COST
 from src.tokens.service import ensure_monthly_tokens
 from src.users.dependencies import ActiveUser, SessionDep
 
