@@ -72,6 +72,6 @@ def client_fixture(session: Session) -> Generator[TestClient, None, None]:
             yield async_session
 
     app.dependency_overrides[get_async_db] = get_async_db_override
-    client = TestClient(app)
-    yield client
+    with TestClient(app) as client:
+        yield client
     app.dependency_overrides.clear()

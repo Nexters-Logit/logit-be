@@ -30,6 +30,7 @@ from src.projects import router as projects_router
 from src.questions import router as questions_router
 from src.report import router as report_router
 from src.subscription import router as subscription_router
+from src.tokens import router as tokens_router
 from src.users import router as users_router
 
 # Load logging configuration
@@ -235,6 +236,11 @@ app.include_router(
     banners_router.router,
     prefix=f"{settings.API_V1_STR}/banners",
     tags=["Banners"],
+)
+app.include_router(
+    tokens_router.router,
+    prefix=f"{settings.API_V1_STR}/tokens",
+    tags=["Tokens"],
 )
 
 @app.get("/")

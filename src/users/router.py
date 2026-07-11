@@ -3,12 +3,52 @@
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
 
 from src.common.responses import RESPONSES_CRUD_WITH_AUTH
 from src.users import schemas, service
 from src.users.dependencies import ActiveUser, SessionDep
+from src.users.referral import apply_referral_code, get_referral_stats
 
 router = APIRouter()
+
+
+class ReferralInfoResponse(BaseModel):
+    code: str
+    invited_count: int
+
+
+class ApplyReferralRequest(BaseModel):
+    code: str
+
+
+@router.get("/referral", response_model=ReferralInfoResponse)
+async def get_my_referral(current_user: ActiveUser, session: SessionDep):
+    """내 초대 코드 및 초대 현황 조회."""
+    stats = await get_referral_stats(session, current_user)
+    await session.commit()
+    return ReferralInfoResponse(**stats)
+
+
+@router.post("/referral/apply", status_code=status.HTTP_200_OK)
+async def apply_referral(
+    body: ApplyReferralRequest,
+    current_user: ActiveUser,
+    session: SessionDep,
+):
+    """초대 코드 입력 (양쪽 +10토큰)."""
+    result = await apply_referral_code(session, current_user, body.code)
+    if not result["success"]:
+        await session.rollback()
+        reason = result["reason"]
+        if reason == "already_referred":
+            raise HTTPException(status_code=409, detail="이미 초대 코드를 사용했습니다.")
+        if reason == "invalid_code":
+            raise HTTPException(status_code=404, detail="유효하지 않은 초대 코드입니다.")
+        if reason == "self_referral":
+            raise HTTPException(status_code=400, detail="자신의 초대 코드는 사용할 수 없습니다.")
+    await session.commit()
+    return {"message": "초대 코드 적용 완료"}
 
 
 @router.get(

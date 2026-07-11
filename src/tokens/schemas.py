@@ -1,0 +1,14 @@
+"""토큰 API 스키마."""
+
+from pydantic import BaseModel
+
+
+class TokenBalanceResponse(BaseModel):
+    balance: int
+    plan: str
+    monthly_tokens: int
+    monthly_grant_received: bool = False
+    monthly_grant_amount: int = 0
+    referral_reward_received: bool = False
+    referral_reward_amount: int = 0
+    referral_reward_count: int = 0

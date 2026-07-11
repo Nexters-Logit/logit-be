@@ -20,6 +20,10 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports:
+          - 6333:6333
 
     steps:
       - name: Checkout code
@@ -38,6 +42,9 @@ jobs:
 
       - name: Lint
         run: uv run ruff check src/
+
+      - name: Wait for Qdrant
+        run: timeout 30 bash -c 'until curl -sf http://localhost:6333/collections; do sleep 1; done'
 
       - name: Test
         run: uv run pytest tests/ -v --no-cov
