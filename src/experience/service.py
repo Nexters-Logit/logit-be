@@ -211,7 +211,7 @@ async def _generate_tags_and_category(experience: Experience) -> tuple[str, Expe
 
     try:
         response = await openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=settings.OPENAI_MODEL,
             messages=[
                 {
                     "role": "system",
@@ -282,7 +282,7 @@ async def _extract_tags_from_question(question_text: str, project_info: str) -> 
 
     try:
         response = await openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=settings.OPENAI_MODEL,
             messages=[
                 {
                     "role": "system",
@@ -378,7 +378,7 @@ async def _extract_category_from_question(question_text: str, project_info: str)
 
     try:
         response = await openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=settings.OPENAI_MODEL,
             messages=[
                 {
                     "role": "system",
