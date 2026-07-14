@@ -144,12 +144,13 @@ async def _find_or_create_user(
                 profile_image_url=picture,
             ),
         )
-        # 회원가입 보너스는 계정 생성 시점에 지급한다.
+        # 회원가입 보너스는 계정 생성 시점에 지급한다 (커밋은 _generate_tokens_for_user에서
+        # JWT 발급과 함께 한 번에 처리 — 여기서 커밋하면 new_user의 속성이 만료되어
+        # 이후 접근 시 비동기 세션에서 암묵적 lazy-load 에러가 난다).
         # FE는 GET /tokens/balance로 지급 여부를 조회한다.
         from src.tokens.service import grant_signup_bonus
 
         await grant_signup_bonus(session, new_user.id)
-        await session.commit()
         return new_user, True
     except IntegrityError:
         await session.rollback()
@@ -173,10 +174,11 @@ async def _generate_tokens_for_user(
     access_token = create_access_token(subject=str(user.id))
     refresh_token = create_refresh_token(subject=str(user.id))
 
+    # update_refresh_token이 세션을 커밋한다 — _find_or_create_user에서 지급된
+    # 가입 보너스 등 이 세션에 남아있는 변경사항도 함께 반영된다.
     await user_service.update_refresh_token(
         session=session, db_user=user, refresh_token=refresh_token
     )
-    await session.commit()
 
     return {
         "is_new_user": is_new_user,
