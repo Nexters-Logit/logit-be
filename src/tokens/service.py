@@ -220,10 +220,14 @@ async def ensure_monthly_tokens(
 
 # ── 신규 가입 보너스 ──────────────────────────────────────────────
 
-async def grant_signup_bonus(session: AsyncSession, user_id: UUID) -> int:
+async def grant_signup_bonus(session: AsyncSession, user_id: UUID) -> tuple[bool, int]:
     """
     신규 가입 1회성 보너스 지급 (50토큰).
     이미 지급된 경우 건너뛴다. (granted, amount) 튜플 반환.
+
+    지급 시점(회원가입 API)과 FE에 알리는 시점(GET /tokens/balance)이 다르므로,
+    조회 시 1회만 알려줄 수 있도록 미확인 보상 금액을 함께 기록해둔다
+    (claim_signup_bonus_notification 참고).
     """
     token = await get_or_create_balance(session, user_id, with_lock=True)
     if token.signup_bonus_granted:
@@ -231,6 +235,7 @@ async def grant_signup_bonus(session: AsyncSession, user_id: UUID) -> int:
 
     token.balance += SIGNUP_BONUS_TOKENS
     token.signup_bonus_granted = True
+    token.unnotified_signup_bonus_amount = SIGNUP_BONUS_TOKENS
     token.updated_at = datetime.now(timezone.utc)
     await _record_transaction(
         session, user_id, SIGNUP_BONUS_TOKENS,
@@ -238,6 +243,19 @@ async def grant_signup_bonus(session: AsyncSession, user_id: UUID) -> int:
     )
     logger.info("Signup bonus granted: user=%s amount=%d", user_id, SIGNUP_BONUS_TOKENS)
     return True, SIGNUP_BONUS_TOKENS
+
+
+async def claim_signup_bonus_notification(session: AsyncSession, user_id: UUID) -> int:
+    """
+    미확인 가입 보너스를 조회 후 즉시 초기화한다 (조회 시 1회만 알림).
+    Returns amount
+    """
+    token = await get_or_create_balance(session, user_id, with_lock=True)
+    amount = token.unnotified_signup_bonus_amount
+    if amount:
+        token.unnotified_signup_bonus_amount = 0
+        token.updated_at = datetime.now(timezone.utc)
+    return amount
 
 
 # ── 출석 이벤트 ───────────────────────────────────────────────────

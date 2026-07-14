@@ -81,9 +81,6 @@ class MobileTokenResponse(BaseModel):
     is_new_user: bool = Field(..., description="신규 사용자 여부")
     access_token: str = Field(..., description="액세스 토큰")
     refresh_token: str = Field(..., description="리프레시 토큰")
-    signup_bonus_amount: int = Field(default=0, description="신규 가입 보너스 지급 토큰 수 (0이면 미지급)")
-    monthly_grant_amount: int = Field(default=0, description="이번 결제 주기 월 토큰 지급 수 (0이면 미지급)")
-    attendance_amount: int = Field(default=0, description="이번 로그인으로 지급된 출석 토큰 수 (0이면 미지급)")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -91,9 +88,6 @@ class MobileTokenResponse(BaseModel):
                 "is_new_user": True,
                 "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                "signup_bonus_amount": 50,
-                "monthly_grant_amount": 30,
-                "attendance_amount": 3,
             }
         }
     )

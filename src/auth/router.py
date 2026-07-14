@@ -337,18 +337,12 @@ async def exchange_token(request: schemas.OAuthTokenRequest):
             "is_new_user": token_data["is_new_user"],
             "access_token": token_data["access_token"],
             "refresh_token": token_data["refresh_token"],
-            "signup_bonus_amount": token_data.get("signup_bonus_amount", 0),
-            "monthly_grant_amount": token_data.get("monthly_grant_amount", 0),
-            "attendance_amount": token_data.get("attendance_amount", 0),
         })
 
     # web: refresh_token은 쿠키로
     response = JSONResponse(content={
         "is_new_user": token_data["is_new_user"],
         "access_token": token_data["access_token"],
-        "signup_bonus_amount": token_data.get("signup_bonus_amount", 0),
-        "monthly_grant_amount": token_data.get("monthly_grant_amount", 0),
-        "attendance_amount": token_data.get("attendance_amount", 0),
     })
     _set_refresh_cookie(response, token_data["refresh_token"])
     return response

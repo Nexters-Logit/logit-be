@@ -142,14 +142,18 @@ def _exchange_temp_code(client: TestClient, redirect_location: str) -> dict:
 @patch("src.auth.router._verify_oauth_state", return_value=None)
 @patch("src.auth.service.httpx.AsyncClient.post")
 @patch("src.auth.service.httpx.AsyncClient.get")
-def test_login_auto_checkin_attendance(
+def test_new_user_login_grants_signup_bonus_and_attendance_via_balance(
     mock_get: AsyncMock,
     mock_post: AsyncMock,
     mock_verify_state: AsyncMock,
     client: TestClient,
     session: Session,
 ) -> None:
-    """하루 첫 로그인 시 출석 이벤트가 자동으로 체크인되고 토큰이 지급돼야 한다."""
+    """
+    회원가입 보너스는 계정 생성 시점(로그인 플로우)에 지급되지만,
+    실제 값 확인은 인증과 분리된 GET /tokens/balance에서 이뤄진다.
+    출석도 동일 엔드포인트에서 그 날 첫 조회 시 지급된다.
+    """
     mock_post.return_value = AsyncMock(
         status_code=200,
         json=lambda: {"access_token": "google_access_token"},
@@ -168,68 +172,51 @@ def test_login_auto_checkin_attendance(
         "/api/v1/auth/google/callback?code=test_auth_code&state=test_state",
         follow_redirects=False,
     )
-    data = _exchange_temp_code(client, response.headers["location"])
-    assert data["attendance_amount"] == 3
+    login_data = _exchange_temp_code(client, response.headers["location"])
+    # 로그인 응답 자체에는 토큰 지급 내역이 더 이상 포함되지 않는다
+    assert "signup_bonus_amount" not in login_data
+    assert "attendance_amount" not in login_data
 
     session.expire_all()
     user = session.query(User).filter(User.email == "attendance@gmail.com").first()
     assert user is not None
+
+    # 계정 생성 시점에 가입 보너스 트랜잭션은 이미 기록되어 있다
+    bonus_tx = (
+        session.query(TokenTransaction)
+        .filter(
+            TokenTransaction.user_id == user.id,
+            TokenTransaction.type == TokenTransactionType.SIGNUP_BONUS,
+        )
+        .first()
+    )
+    assert bonus_tx is not None
+    assert bonus_tx.amount == 50
+
+    balance_resp = client.get(
+        "/api/v1/tokens/balance",
+        headers={"Authorization": f"Bearer {login_data['access_token']}"},
+    )
+    balance = balance_resp.json()
+    assert balance["signup_bonus_received"] is True
+    assert balance["signup_bonus_amount"] == 50
+    assert balance["attendance_received"] is True
+    assert balance["attendance_amount"] == 3
+
     attendance_log = (
         session.query(AttendanceLog).filter(AttendanceLog.user_id == user.id).first()
     )
     assert attendance_log is not None
-    attendance_tx = (
-        session.query(TokenTransaction)
-        .filter(
-            TokenTransaction.user_id == user.id,
-            TokenTransaction.type == TokenTransactionType.ATTENDANCE,
-        )
-        .first()
-    )
-    assert attendance_tx is not None
-    assert attendance_tx.amount == 3
 
-
-@patch("src.auth.router._verify_oauth_state", return_value=None)
-@patch("src.auth.service.httpx.AsyncClient.post")
-@patch("src.auth.service.httpx.AsyncClient.get")
-def test_login_auto_checkin_attendance_second_login_same_day(
-    mock_get: AsyncMock,
-    mock_post: AsyncMock,
-    mock_verify_state: AsyncMock,
-    client: TestClient,
-    session: Session,
-) -> None:
-    """같은 날 두 번째 로그인에서는 출석 토큰이 중복 지급되지 않아야 한다."""
-    mock_post.return_value = AsyncMock(
-        status_code=200,
-        json=lambda: {"access_token": "google_access_token"},
-    )
-    mock_get.return_value = AsyncMock(
-        status_code=200,
-        json=lambda: {
-            "email": "twice@gmail.com",
-            "name": "Twice User",
-            "id": "google_twice",
-            "picture": None,
-        },
-    )
-
-    first = client.get(
-        "/api/v1/auth/google/callback?code=test_auth_code&state=test_state",
-        follow_redirects=False,
-    )
-    first_data = _exchange_temp_code(client, first.headers["location"])
-    assert first_data["attendance_amount"] == 3
-
-    second = client.get(
-        "/api/v1/auth/google/callback?code=test_auth_code&state=test_state",
-        follow_redirects=False,
-    )
-    second_data = _exchange_temp_code(client, second.headers["location"])
-    assert second_data["attendance_amount"] == 0
-    # 로그인 자체는 계속 성공해야 한다
-    assert second_data["access_token"]
+    # 같은 날 두 번째 조회에서는 둘 다 중복 지급/재알림되지 않아야 한다
+    second_balance = client.get(
+        "/api/v1/tokens/balance",
+        headers={"Authorization": f"Bearer {login_data['access_token']}"},
+    ).json()
+    assert second_balance["signup_bonus_received"] is False
+    assert second_balance["signup_bonus_amount"] == 0
+    assert second_balance["attendance_received"] is False
+    assert second_balance["attendance_amount"] == 0
 
 
 def test_refresh_token_success(client: TestClient, session: Session) -> None:

@@ -1,7 +1,6 @@
 """Authentication service layer - OAuth and JWT logic."""
 
 import json
-import logging
 import time
 from collections.abc import Callable, Coroutine
 from datetime import datetime, timedelta, timezone
@@ -25,8 +24,6 @@ from src.config import settings
 from src.security import create_access_token, create_refresh_token
 from src.users import service as user_service
 from src.users.models import OAuthProvider, User
-
-logger = logging.getLogger(__name__)
 
 # JWKS 비동기 캐시 (Google / Apple 공용 패턴)
 _JWKS_CACHE_TTL = 3600  # 1시간
@@ -147,6 +144,12 @@ async def _find_or_create_user(
                 profile_image_url=picture,
             ),
         )
+        # 회원가입 보너스는 계정 생성 시점에 지급한다.
+        # FE는 GET /tokens/balance로 지급 여부를 조회한다.
+        from src.tokens.service import grant_signup_bonus
+
+        await grant_signup_bonus(session, new_user.id)
+        await session.commit()
         return new_user, True
     except IntegrityError:
         await session.rollback()
@@ -162,45 +165,23 @@ async def _find_or_create_user(
 async def _generate_tokens_for_user(
     session: AsyncSession, user: User, is_new_user: bool
 ) -> dict:
-    """사용자에 대한 JWT 토큰 생성 및 DB 저장."""
-    from src.database import get_redis
-    from src.tokens.constants import ATTENDANCE_TOKENS
-    from src.tokens.service import check_in, ensure_monthly_tokens, grant_signup_bonus
+    """사용자에 대한 JWT 토큰 생성 및 DB 저장.
 
+    토큰 경제(가입 보너스/월 지급/출석)는 이 함수의 책임이 아니다.
+    FE는 로그인 직후 GET /tokens/balance를 호출해 지급 결과를 받는다.
+    """
     access_token = create_access_token(subject=str(user.id))
     refresh_token = create_refresh_token(subject=str(user.id))
 
     await user_service.update_refresh_token(
         session=session, db_user=user, refresh_token=refresh_token
     )
-
-    # 신규 가입: 가입 보너스(50토큰) + 첫 달 월 토큰 지급
-    signup_bonus_amount = 0
-    monthly_grant_amount = 0
-    if is_new_user:
-        _, signup_bonus_amount = await grant_signup_bonus(session, user.id)
-        _, monthly_grant_amount, _ = await ensure_monthly_tokens(session, user.id, subscription=None)
-
-    # 하루 첫 로그인 시 출석 이벤트 자동 체크인
-    attendance_amount = 0
-    try:
-        redis = await get_redis()
-        attendance_success, _ = await check_in(session, user.id, redis)
-        if attendance_success:
-            attendance_amount = ATTENDANCE_TOKENS
-    except Exception:
-        logger.exception("Attendance auto check-in failed: user=%s", user.id)
-
-    # 로그인 시 지급된 토큰(가입 보너스/월 지급/출석)을 영속화한다.
     await session.commit()
 
     return {
         "is_new_user": is_new_user,
         "access_token": access_token,
         "refresh_token": refresh_token,
-        "signup_bonus_amount": signup_bonus_amount,
-        "monthly_grant_amount": monthly_grant_amount,
-        "attendance_amount": attendance_amount,
     }
 
 

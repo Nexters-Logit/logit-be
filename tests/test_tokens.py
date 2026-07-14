@@ -50,8 +50,10 @@ def test_get_balance_no_record(client: TestClient, session: Session) -> None:
     data = resp.json()
     assert data["plan"] == "free"
     assert data["monthly_tokens"] == PLAN_MONTHLY_TOKENS["free"]
-    # 첫 조회 시 월 토큰이 자동 지급된다
-    assert data["balance"] == PLAN_MONTHLY_TOKENS["free"]
+    # 첫 조회 시 월 토큰 + 당일 출석 토큰이 함께 자동 지급된다
+    assert data["monthly_grant_received"] is True
+    assert data["attendance_received"] is True
+    assert data["balance"] == PLAN_MONTHLY_TOKENS["free"] + data["attendance_amount"]
 
 
 def test_get_balance_monthly_grant_not_doubled(client: TestClient, session: Session) -> None:
