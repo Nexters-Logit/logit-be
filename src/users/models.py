@@ -7,6 +7,8 @@ from uuid import UUID, uuid4
 from sqlalchemy import Column, DateTime
 from sqlmodel import Field, SQLModel
 
+from src.common.crypto import EncryptedString
+
 
 class OAuthProvider(str, Enum):
     """OAuth provider types."""
@@ -35,6 +37,16 @@ class User(SQLModel, table=True):
     terms_agreed_at: datetime | None = Field(
         default=None, sa_column=Column(DateTime(timezone=True))
     )
+
+    # 결제 알림 전화번호 (PayApp recvphone) — Fernet 암호화 저장
+    phone: str | None = Field(
+        default=None,
+        sa_column=Column("phone", EncryptedString(255), nullable=True),
+    )
+
+    # 친구 초대
+    referral_code: str | None = Field(default=None, max_length=20, unique=True)
+    referred_by_user_id: str | None = Field(default=None, max_length=36)
 
     # JWT tokens
     refresh_token: str | None = Field(default=None)

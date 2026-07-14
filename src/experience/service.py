@@ -7,16 +7,27 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
-from openai import AsyncOpenAI, APIError, APIConnectionError, RateLimitError, AuthenticationError
+from openai import (
+    APIConnectionError,
+    APIError,
+    AsyncOpenAI,
+    AuthenticationError,
+    RateLimitError,
+)
 from qdrant_client import QdrantClient
-from qdrant_client.models import Direction, Filter, FieldCondition, MatchValue, OrderBy, PointStruct
 from qdrant_client.http.exceptions import UnexpectedResponse
+from qdrant_client.models import (
+    Direction,
+    FieldCondition,
+    Filter,
+    MatchValue,
+    OrderBy,
+    PointStruct,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-# Initialize logger
-logger = logging.getLogger(__name__)
-
+from src.ai_usage.service import log_usage
 from src.config import settings
 from src.experience.models import (
     AVAILABLE_CATEGORIES,
@@ -31,6 +42,9 @@ from src.experience.schemas import (
 )
 from src.projects.models import Project
 from src.questions.models import Question
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 # Initialize OpenAI async client
 openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
@@ -60,7 +74,7 @@ def _sanitize_for_logging(text: str, max_length: int = 50) -> str:
     return f"{text[:max_length]}..."
 
 
-async def _generate_embedding(text: str) -> list[float]:
+async def _generate_embedding(text: str) -> tuple[list[float], int | None]:
     """
     Generate embedding vector using OpenAI text-embedding-3-small.
 
@@ -78,7 +92,7 @@ async def _generate_embedding(text: str) -> list[float]:
             model="text-embedding-3-small",
             input=text,
         )
-        return response.data[0].embedding
+        return response.data[0].embedding, (response.usage.prompt_tokens if response.usage else None)
     except AuthenticationError as e:
         logger.error("OpenAI API authentication failed: %s", e, exc_info=True)
         raise HTTPException(
@@ -319,7 +333,7 @@ def _calculate_tag_matching_score(experience_tags: str, question_tags: list[str]
         return 0.0
 
     # Parse experience tags
-    exp_tags_set = set(tag.strip() for tag in experience_tags.split(","))
+    exp_tags_set = {tag.strip() for tag in experience_tags.split(",")}
     question_tags_set = set(question_tags)
 
     # Calculate intersection
@@ -515,7 +529,9 @@ async def create_experience(
 
     # Generate embedding
     text = _combine_text_for_embedding(experience)
-    embedding = await _generate_embedding(text)
+    embedding, emb_tokens = await _generate_embedding(text)
+    log_usage(user_id=UUID(user_id), subscription_type="logit", plan="free",
+              endpoint="embedding", model="text-embedding-3-small", input_tokens=emb_tokens)
 
     # Store in Qdrant
     try:
@@ -806,7 +822,9 @@ async def update_experience(
 
         # Regenerate embedding
         text = _combine_text_for_embedding(updated_experience)
-        embedding = await _generate_embedding(text)
+        embedding, emb_tokens = await _generate_embedding(text)
+        log_usage(user_id=UUID(user_id), subscription_type="logit", plan="free",
+                  endpoint="embedding", model="text-embedding-3-small", input_tokens=emb_tokens)
 
         # Update with new embedding
         try:
@@ -916,7 +934,9 @@ async def search_experiences(
         HTTPException: If search fails
     """
     # Generate query embedding
-    query_embedding = await _generate_embedding(query)
+    query_embedding, emb_tokens = await _generate_embedding(query)
+    log_usage(user_id=UUID(user_id), subscription_type="logit", plan="free",
+              endpoint="embedding", model="text-embedding-3-small", input_tokens=emb_tokens)
 
     # Filter by user_id
     user_filter = Filter(
@@ -1023,17 +1043,20 @@ async def get_experiences_with_question_similarity(
 
     # Generate separate embeddings for each dimension and combine with weights
     # Priority: 문항(0.6) > 직무(0.25) > 회사 도메인(0.15)
-    question_emb, job_emb, company_emb = await asyncio.gather(
+    (question_emb, qt), (job_emb, jt), (company_emb, ct) = await asyncio.gather(
         _generate_embedding(f"문항: {question.question}"),
         _generate_embedding(f"직무: {project.job_position}"),
         _generate_embedding(f"회사: {project.company}"),
     )
+    total_emb_tokens = (qt or 0) + (jt or 0) + (ct or 0) or None
+    log_usage(user_id=UUID(user_id), subscription_type="logit", plan="free",
+              endpoint="embedding", model="text-embedding-3-small", input_tokens=total_emb_tokens)
 
     # Weighted average of embedding vectors
     w_question, w_job, w_company = 0.6, 0.25, 0.15
     combined = [
         q * w_question + j * w_job + c * w_company
-        for q, j, c in zip(question_emb, job_emb, company_emb)
+        for q, j, c in zip(question_emb, job_emb, company_emb, strict=True)
     ]
     # L2 normalize
     norm = sum(x ** 2 for x in combined) ** 0.5

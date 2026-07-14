@@ -14,13 +14,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth import constants
-from src.auth.utils import generate_random_nickname, get_oauth_redirect_uri
 from src.auth.exceptions import (
     InvalidTokenError,
     OAuthError,
     OAuthProviderNotConfiguredError,
 )
 from src.auth.schemas import OAuthUserCreate
+from src.auth.utils import generate_random_nickname, get_oauth_redirect_uri
 from src.config import settings
 from src.security import create_access_token, create_refresh_token
 from src.users import service as user_service
@@ -122,8 +122,8 @@ async def _find_or_create_user(
     OAuth 사용자 조회 또는 생성.
     Returns (user, is_new_user)
     """
-    # 1) 동일 provider + provider_id로 기존 사용자 조회
-    # 동일 email로 이미 가입된 사용자가 있으면 기존 계정으로 로그인
+    # 이메일 기준으로 기존 계정 조회.
+    # Google/Apple 등 다른 provider라도 동일 이메일이면 같은 계정으로 로그인.
     email_user = await user_service.get_user_by_email(
         session=session, email=email
     )
@@ -156,13 +156,17 @@ async def _find_or_create_user(
         )
         if existing:
             return existing, False
-        raise OAuthError("Account creation conflict. Please try again.")
+        raise OAuthError("Account creation conflict. Please try again.") from None
 
 
 async def _generate_tokens_for_user(
     session: AsyncSession, user: User, is_new_user: bool
 ) -> dict:
     """사용자에 대한 JWT 토큰 생성 및 DB 저장."""
+    from src.database import get_redis
+    from src.tokens.constants import ATTENDANCE_TOKENS
+    from src.tokens.service import check_in, ensure_monthly_tokens, grant_signup_bonus
+
     access_token = create_access_token(subject=str(user.id))
     refresh_token = create_refresh_token(subject=str(user.id))
 
@@ -170,10 +174,33 @@ async def _generate_tokens_for_user(
         session=session, db_user=user, refresh_token=refresh_token
     )
 
+    # 신규 가입: 가입 보너스(50토큰) + 첫 달 월 토큰 지급
+    signup_bonus_amount = 0
+    monthly_grant_amount = 0
+    if is_new_user:
+        _, signup_bonus_amount = await grant_signup_bonus(session, user.id)
+        _, monthly_grant_amount, _ = await ensure_monthly_tokens(session, user.id, subscription=None)
+
+    # 하루 첫 로그인 시 출석 이벤트 자동 체크인
+    attendance_amount = 0
+    try:
+        redis = await get_redis()
+        attendance_success, _ = await check_in(session, user.id, redis)
+        if attendance_success:
+            attendance_amount = ATTENDANCE_TOKENS
+    except Exception:
+        logger.exception("Attendance auto check-in failed: user=%s", user.id)
+
+    # 로그인 시 지급된 토큰(가입 보너스/월 지급/출석)을 영속화한다.
+    await session.commit()
+
     return {
         "is_new_user": is_new_user,
         "access_token": access_token,
         "refresh_token": refresh_token,
+        "signup_bonus_amount": signup_bonus_amount,
+        "monthly_grant_amount": monthly_grant_amount,
+        "attendance_amount": attendance_amount,
     }
 
 
@@ -310,9 +337,7 @@ async def _verify_apple_id_token(
 
     kid = unverified_header.get("kid")
     signing_key = await _find_jwks_key(kid, _get_apple_jwks, "Apple")
-    allowed_audiences = [settings.APPLE_CLIENT_ID]
-    if settings.APPLE_CLIENT_ID:
-        allowed_audiences.append(settings.APPLE_CLIENT_ID[:-3])  # bundle id (앱용)
+    allowed_audiences = [aud for aud in [settings.APPLE_CLIENT_ID, settings.APPLE_BUNDLE_ID] if aud]
 
     try:
         decoded = jwt.decode(

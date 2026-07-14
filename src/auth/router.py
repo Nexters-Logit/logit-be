@@ -5,12 +5,12 @@ import secrets
 from urllib.parse import urlencode
 from uuid import UUID
 
-from fastapi import APIRouter, Cookie, Form, Header, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Form, Header, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from src.auth import constants, schemas, service
-from src.auth.utils import get_frontend_callback_url, get_oauth_redirect_uri
 from src.auth.exceptions import OAuthError, OAuthProviderNotConfiguredError
+from src.auth.utils import get_frontend_callback_url, get_oauth_redirect_uri
 from src.common.responses import (
     ERROR_400_BAD_REQUEST,
     ERROR_401_UNAUTHORIZED,
@@ -38,17 +38,25 @@ def _extract_bearer_token(authorization: str | None) -> str | None:
     return None
 
 
+def _cookie_kwargs() -> dict:
+    """환경별 쿠키 보안 설정을 반환한다."""
+    is_prod = settings.ENVIRONMENT == "production"
+    return {
+        "httponly": True,
+        "secure": is_prod,
+        "samesite": "lax",
+        "domain": ".logit.ai.kr" if is_prod else None,
+        "path": "/",
+    }
+
+
 def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
     """HttpOnly refresh token 쿠키 설정 (웹 전용)."""
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        domain=".logit.ai.kr",
-        path="/",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        **_cookie_kwargs(),
     )
 
 
@@ -56,11 +64,7 @@ def _delete_refresh_cookie(response: Response) -> None:
     """refresh token 쿠키 삭제."""
     response.delete_cookie(
         key="refresh_token",
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        domain=".logit.ai.kr",
-        path="/",
+        **_cookie_kwargs(),
     )
 
 
@@ -160,10 +164,8 @@ async def google_callback(code: str, state: str, session: SessionDep):
     try:
         await _verify_oauth_state(state)
         result = await service.google_oauth_flow(code=code, session=session)
-    except HTTPException as e:
-        return _error_redirect(e.detail)
     except Exception:
-        return _error_redirect("Google 로그인 처리 중 오류가 발생했습니다.")
+        return _error_redirect("oauth_failed")
 
     return await _store_temp_code_and_redirect(result)
 
@@ -263,10 +265,8 @@ async def apple_callback(
         result = await service.apple_oauth_flow(
             code=code, user_json=user, session=session, nonce=nonce
         )
-    except HTTPException as e:
-        return _error_redirect(e.detail)
     except Exception:
-        return _error_redirect("Apple 로그인 처리 중 오류가 발생했습니다.")
+        return _error_redirect("oauth_failed")
 
     return await _store_temp_code_and_redirect(result)
 
@@ -337,12 +337,18 @@ async def exchange_token(request: schemas.OAuthTokenRequest):
             "is_new_user": token_data["is_new_user"],
             "access_token": token_data["access_token"],
             "refresh_token": token_data["refresh_token"],
+            "signup_bonus_amount": token_data.get("signup_bonus_amount", 0),
+            "monthly_grant_amount": token_data.get("monthly_grant_amount", 0),
+            "attendance_amount": token_data.get("attendance_amount", 0),
         })
 
     # web: refresh_token은 쿠키로
     response = JSONResponse(content={
         "is_new_user": token_data["is_new_user"],
         "access_token": token_data["access_token"],
+        "signup_bonus_amount": token_data.get("signup_bonus_amount", 0),
+        "monthly_grant_amount": token_data.get("monthly_grant_amount", 0),
+        "attendance_amount": token_data.get("attendance_amount", 0),
     })
     _set_refresh_cookie(response, token_data["refresh_token"])
     return response

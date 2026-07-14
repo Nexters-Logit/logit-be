@@ -4,8 +4,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import Distance, PayloadSchemaType, VectorParams
 from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.config import settings
 
@@ -17,14 +16,16 @@ async_engine = create_async_engine(
 )
 
 
+async_session_factory = async_sessionmaker(
+    async_engine, class_=AsyncSession, expire_on_commit=False
+)
+
+
 async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Async database session dependency.
     """
-    async_session = sessionmaker(
-        async_engine, class_=AsyncSession, expire_on_commit=False
-    )
-    async with async_session() as session:
+    async with async_session_factory() as session:
         yield session
 
 
@@ -86,7 +87,7 @@ def init_qdrant_collection() -> None:
         else:
             # Re-raise other UnexpectedResponse errors (network, auth, invalid collection, etc.)
             raise
-    except Exception as e:
+    except Exception:
         # Re-raise any non-Qdrant errors
         raise
 

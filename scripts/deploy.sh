@@ -158,6 +158,11 @@ init_deploy() {
 
     wait_for_healthy "blue"
 
+    # Run database migrations
+    log_info "Running database migrations..."
+    docker compose -f "$COMPOSE_FILE" exec -T app-blue alembic upgrade head
+    log_success "Migrations complete"
+
     log_info "Starting Caddy..."
     docker compose -f "$COMPOSE_FILE" up -d caddy
 
@@ -194,6 +199,11 @@ deploy() {
         log_error "app-${target} stopped. Active remains: ${active}"
         exit 1
     fi
+
+    # Run database migrations
+    log_info "Running database migrations..."
+    docker compose -f "$COMPOSE_FILE" exec -T "app-${target}" alembic upgrade head
+    log_success "Migrations complete"
 
     # Switch Caddy to new target
     update_caddyfile "$target"

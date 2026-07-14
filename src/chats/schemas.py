@@ -1,17 +1,18 @@
-from pydantic import BaseModel, Field, field_validator, ConfigDict
-from uuid import UUID
-from typing import List
 from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
 
 class ChatRequest(BaseModel):
     """메시지 전송 요청"""
-    
+
     question_id: UUID = Field(
         ...,
         description="프로젝트의 문항 ID",
         examples=["3fa85f64-5717-4562-b3fc-2c963f66afa6"]
     )
-    experience_ids: List[str] | None = Field(
+    experience_ids: list[str] | None = Field(
         default=None,
         description="선택한 경험 UUID 목록 (선택사항, 최대 3개)",
         examples=[
@@ -32,21 +33,21 @@ class ChatRequest(BaseModel):
 
     @field_validator("experience_ids")
     @classmethod
-    def validate_experience_ids(cls, v: List[str]) -> List[str]:
+    def validate_experience_ids(cls, v: list[str]) -> list[str]:
         """경험 ID 검증"""
-        
+
         if v is None:
             return None
-        
+
         if len(v) == 0:
             return []
-        
+
         if len(v) > 3:
             raise ValueError("최대 3개의 경험만 선택할 수 있습니다")
-        
+
         if len(v) != len(set(v)):
             raise ValueError("중복된 경험을 선택할 수 없습니다")
-        
+
         return v
 
     model_config = {
@@ -88,8 +89,8 @@ class ChatHistoryResponse(BaseModel):
         default=None,
         description="현재 저장된 자기소개서 답변 (업데이트한 답변)"
     )
-    chats: List[ChatHistoryItem]
-    experience_ids: List[str] = []
+    chats: list[ChatHistoryItem]
+    experience_ids: list[str] = []
     next_cursor: str | None = Field(
         default=None,
         description="다음 페이지 조회용 cursor (없으면 마지막 페이지)"
@@ -98,8 +99,13 @@ class ChatHistoryResponse(BaseModel):
         default=False,
         description="더 많은 데이터가 있는지 여부"
     )
-    remaining_chats: int = Field(
-        description="오늘 남은 채팅 횟수"
+    remaining_chats: int | None = Field(
+        default=None,
+        description="이번 달 남은 채팅 횟수 (null = 무제한)"
+    )
+    remaining_drafts: int | None = Field(
+        default=None,
+        description="이번 달 남은 초안 생성 횟수 (null = 무제한)"
     )
 
     model_config = {

@@ -1,6 +1,5 @@
 """User service layer - Business logic for user operations."""
 
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,21 +44,21 @@ async def update_refresh_token(*, session: AsyncSession, db_user: User, refresh_
     return db_user
 
 
-async def get_user_by_email(*, session: AsyncSession, email: str) -> Optional[User]:
+async def get_user_by_email(*, session: AsyncSession, email: str) -> User | None:
     """Get user by email."""
     statement = select(User).where(User.email == email)
     result = await session.execute(statement)
     return result.scalars().first()
 
 
-async def get_user_by_id(*, session: AsyncSession, user_id: UUID) -> Optional[User]:
+async def get_user_by_id(*, session: AsyncSession, user_id: UUID) -> User | None:
     """Get user by ID."""
     return await session.get(User, user_id)
 
 
 async def get_user_by_oauth(
     *, session: AsyncSession, provider: str, provider_id: str
-) -> Optional[User]:
+) -> User | None:
     """Get user by OAuth provider and provider ID."""
     statement = select(User).where(
         User.oauth_provider == provider, User.oauth_provider_id == provider_id
@@ -68,7 +67,7 @@ async def get_user_by_oauth(
     return result.scalars().first()
 
 
-async def delete_user(*, session: AsyncSession, user_id: UUID) -> Optional[User]:
+async def delete_user(*, session: AsyncSession, user_id: UUID) -> User | None:
     """Soft delete a user (is_active=False, refresh_token 무효화).
     oauth_provider_id를 보존해 재가입 시 무료 체험 중복 발급을 차단한다.
     """

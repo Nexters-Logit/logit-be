@@ -4,30 +4,34 @@ FastAPI application with domain-driven structure.
 Inspired by fastapi-best-practices and Netflix Dispatch.
 """
 
-import secrets
 import logging
-from logging.config import fileConfig
-from contextlib import asynccontextmanager
+import secrets
 import time
+from contextlib import asynccontextmanager
+from logging.config import fileConfig
 
 import sentry_sdk
-from fastapi import Depends, FastAPI, HTTPException, status, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from src.auth import router as auth_router
+from src.banners import router as banners_router
+from src.chats import router as chats_router
+from src.common.slack import send_error_notification
 from src.config import settings
 from src.database import init_qdrant_collection
 from src.experience import router as experience_router
+from src.payment import router as payment_router
+from src.plans import router as plans_router
 from src.projects import router as projects_router
 from src.questions import router as questions_router
-from src.users import router as users_router
-from src.chats import router as chats_router
 from src.report import router as report_router
 from src.subscription import router as subscription_router
-from src.common.slack import send_error_notification
+from src.tokens import router as tokens_router
+from src.users import router as users_router
 
 # Load logging configuration
 fileConfig('logging.ini', disable_existing_loggers=False)
@@ -133,7 +137,7 @@ async def logging_middleware(request: Request, call_next):
     try:
         response = await call_next(request)
         process_time = (time.time() - start_time) * 1000
-        
+
         logger.info(
             f'"{request.method} {request.url.path}" {response.status_code} {process_time:.2f}ms'
         )
@@ -173,8 +177,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.all_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Admin-Secret"],
 )
 
 # Include domain routers
@@ -217,6 +221,26 @@ app.include_router(
     subscription_router.router,
     prefix=f"{settings.API_V1_STR}/subscriptions",
     tags=["Subscriptions"],
+)
+app.include_router(
+    payment_router.router,
+    prefix=f"{settings.API_V1_STR}/payments",
+    tags=["Payments"],
+)
+app.include_router(
+    plans_router.router,
+    prefix=f"{settings.API_V1_STR}/plans",
+    tags=["Plans"],
+)
+app.include_router(
+    banners_router.router,
+    prefix=f"{settings.API_V1_STR}/banners",
+    tags=["Banners"],
+)
+app.include_router(
+    tokens_router.router,
+    prefix=f"{settings.API_V1_STR}/tokens",
+    tags=["Tokens"],
 )
 
 @app.get("/")

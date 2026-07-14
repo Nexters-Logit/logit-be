@@ -3,7 +3,7 @@
 from uuid import UUID
 
 from langchain_core.chat_history import BaseChatMessageHistory
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 

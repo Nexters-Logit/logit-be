@@ -1,5 +1,4 @@
-import secrets
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     AnyUrl,
@@ -9,7 +8,7 @@ from pydantic import (
     model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing_extensions import Annotated, Self
+from typing_extensions import Self
 
 
 def parse_cors(v: Any) -> list[str] | str:
@@ -108,7 +107,8 @@ class Settings(BaseSettings):
     GOOGLE_ANDROID_CLIENT_ID: str | None = None
 
     # OAuth - Apple
-    APPLE_CLIENT_ID: str | None = None
+    APPLE_CLIENT_ID: str | None = None   # 웹용 Service ID (예: kr.ai.logit.web)
+    APPLE_BUNDLE_ID: str | None = None   # iOS 앱 Bundle ID (예: kr.ai.logit)
     APPLE_TEAM_ID: str | None = None
     APPLE_KEY_ID: str | None = None
     APPLE_PRIVATE_KEY: str | None = None
@@ -126,11 +126,23 @@ class Settings(BaseSettings):
     MCP_JWT_SECRET: str
     MCP_TOKEN_EXPIRE_DAYS: int = 30
 
-    # Chat Rate Limit
-    CHAT_DAILY_LIMIT: int = 10  # 일일 채팅 제한 횟수
-
     # Test User IDs (채팅 제한 면제)
     TEST_USER_IDS: list[str] = []
+
+    # PayApp 결제
+    PAYAPP_USERID: str | None = None
+    PAYAPP_LINKKEY: str | None = None
+    PAYAPP_LINKVAL: str | None = None
+    PAYAPP_CALLBACK_URL: str = "http://localhost:8000/api/v1/payments/webhook"
+    FRONTEND_URL: str = "http://localhost:3000"
+
+    # 전화번호 암호화 키 (Fernet URL-safe base64 32바이트 키)
+    # 생성: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # 미설정 시 평문 저장 (로컬 개발용)
+    PHONE_ENCRYPTION_KEY: str | None = None
+
+    # Admin internal API secret (어드민 서버에서 내부 API 호출 시 사용)
+    ADMIN_SECRET: str | None = None
 
     # Sentry
     SENTRY_DSN: str | None = None
@@ -145,6 +157,11 @@ class Settings(BaseSettings):
             raise ValueError("SECRET_KEY must be set in .env")
         if not self.POSTGRES_PASSWORD:
             raise ValueError("POSTGRES_PASSWORD must be set in .env")
+        if self.ENVIRONMENT == "production":
+            if self.DOCS_USERNAME == "admin" or self.DOCS_PASSWORD == "admin":
+                raise ValueError("DOCS_USERNAME and DOCS_PASSWORD must be changed from defaults in production")
+            if not self.ADMIN_SECRET:
+                raise ValueError("ADMIN_SECRET must be set in production")
         return self
 
 

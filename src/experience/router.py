@@ -12,8 +12,8 @@ from src.experience.schemas import (
     ExperienceListResponse,
     ExperienceQuestionMatchResult,
     ExperienceRead,
-    ExperienceSearchResult,
     ExperienceSearchResponse,
+    ExperienceSearchResult,
     ExperienceUpdate,
     ExperienceWithQuestionSimilarity,
 )

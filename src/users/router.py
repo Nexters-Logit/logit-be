@@ -1,14 +1,52 @@
 """사용자 API 엔드포인트"""
 
-from uuid import UUID
-
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
 
 from src.common.responses import RESPONSES_CRUD_WITH_AUTH
 from src.users import schemas, service
 from src.users.dependencies import ActiveUser, SessionDep
+from src.users.referral import apply_referral_code, get_referral_stats
 
 router = APIRouter()
+
+
+class ReferralInfoResponse(BaseModel):
+    code: str
+    invited_count: int
+
+
+class ApplyReferralRequest(BaseModel):
+    code: str
+
+
+@router.get("/referral", response_model=ReferralInfoResponse)
+async def get_my_referral(current_user: ActiveUser, session: SessionDep):
+    """내 초대 코드 및 초대 현황 조회."""
+    stats = await get_referral_stats(session, current_user)
+    await session.commit()
+    return ReferralInfoResponse(**stats)
+
+
+@router.post("/referral/apply", status_code=status.HTTP_200_OK)
+async def apply_referral(
+    body: ApplyReferralRequest,
+    current_user: ActiveUser,
+    session: SessionDep,
+):
+    """초대 코드 입력 (양쪽 +10토큰)."""
+    result = await apply_referral_code(session, current_user, body.code)
+    if not result["success"]:
+        await session.rollback()
+        reason = result["reason"]
+        if reason == "already_referred":
+            raise HTTPException(status_code=409, detail="이미 초대 코드를 사용했습니다.")
+        if reason == "invalid_code":
+            raise HTTPException(status_code=404, detail="유효하지 않은 초대 코드입니다.")
+        if reason == "self_referral":
+            raise HTTPException(status_code=400, detail="자신의 초대 코드는 사용할 수 없습니다.")
+    await session.commit()
+    return {"message": "초대 코드 적용 완료"}
 
 
 @router.get(
@@ -64,30 +102,3 @@ async def delete_current_user(
     await service.delete_user(session=session, user_id=current_user.id)
     return None
 
-
-@router.get(
-    "/{user_id}",
-    response_model=schemas.UserPublic,
-    responses=RESPONSES_CRUD_WITH_AUTH,
-    summary="특정 사용자 정보 조회",
-)
-async def get_user_by_id(
-    session: SessionDep,
-    current_user: ActiveUser,
-    user_id: UUID,
-):
-    """
-    특정 사용자의 정보를 ID로 조회합니다.
-
-    - **user_id**: 조회할 사용자의 UUID
-    - 사용자를 찾을 수 없는 경우 404 에러를 반환합니다.
-    """
-    user = await service.get_user_by_id(session=session, user_id=user_id)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found.",
-        )
-
-    return user
