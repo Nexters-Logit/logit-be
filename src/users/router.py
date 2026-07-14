@@ -1,7 +1,5 @@
 """사용자 API 엔드포인트"""
 
-from uuid import UUID
-
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
@@ -104,30 +102,3 @@ async def delete_current_user(
     await service.delete_user(session=session, user_id=current_user.id)
     return None
 
-
-@router.get(
-    "/{user_id}",
-    response_model=schemas.UserPublic,
-    responses=RESPONSES_CRUD_WITH_AUTH,
-    summary="특정 사용자 정보 조회",
-)
-async def get_user_by_id(
-    session: SessionDep,
-    current_user: ActiveUser,
-    user_id: UUID,
-):
-    """
-    특정 사용자의 정보를 ID로 조회합니다.
-
-    - **user_id**: 조회할 사용자의 UUID
-    - 사용자를 찾을 수 없는 경우 404 에러를 반환합니다.
-    """
-    user = await service.get_user_by_id(session=session, user_id=user_id)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found.",
-        )
-
-    return user

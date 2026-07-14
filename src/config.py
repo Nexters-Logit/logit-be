@@ -107,7 +107,8 @@ class Settings(BaseSettings):
     GOOGLE_ANDROID_CLIENT_ID: str | None = None
 
     # OAuth - Apple
-    APPLE_CLIENT_ID: str | None = None
+    APPLE_CLIENT_ID: str | None = None   # 웹용 Service ID (예: kr.ai.logit.web)
+    APPLE_BUNDLE_ID: str | None = None   # iOS 앱 Bundle ID (예: kr.ai.logit)
     APPLE_TEAM_ID: str | None = None
     APPLE_KEY_ID: str | None = None
     APPLE_PRIVATE_KEY: str | None = None
@@ -156,6 +157,11 @@ class Settings(BaseSettings):
             raise ValueError("SECRET_KEY must be set in .env")
         if not self.POSTGRES_PASSWORD:
             raise ValueError("POSTGRES_PASSWORD must be set in .env")
+        if self.ENVIRONMENT == "production":
+            if self.DOCS_USERNAME == "admin" or self.DOCS_PASSWORD == "admin":
+                raise ValueError("DOCS_USERNAME and DOCS_PASSWORD must be changed from defaults in production")
+            if not self.ADMIN_SECRET:
+                raise ValueError("ADMIN_SECRET must be set in production")
         return self
 
 

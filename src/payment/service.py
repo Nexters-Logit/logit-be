@@ -1,6 +1,7 @@
 """결제 서비스 — PayApp 결제 시작 및 웹훅 처리."""
 
 import logging
+import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
@@ -429,11 +430,11 @@ async def handle_webhook(
 
 
 def _verify_webhook(form_data: dict[str, str]) -> bool:
-    """PayApp 웹훅 인증 — userid·linkkey·linkval 단순 문자열 비교."""
+    """PayApp 웹훅 인증 — timing-safe 비교."""
     return (
-        form_data.get("userid") == settings.PAYAPP_USERID
-        and form_data.get("linkkey") == settings.PAYAPP_LINKKEY
-        and form_data.get("linkval") == settings.PAYAPP_LINKVAL
+        secrets.compare_digest(form_data.get("userid", ""), settings.PAYAPP_USERID or "")
+        and secrets.compare_digest(form_data.get("linkkey", ""), settings.PAYAPP_LINKKEY or "")
+        and secrets.compare_digest(form_data.get("linkval", ""), settings.PAYAPP_LINKVAL or "")
     )
 
 
@@ -469,19 +470,21 @@ async def _handle_payment_complete(
         logger.error("웹훅 var2(plan_key) 알 수 없음: %s", plan_key_str)
         return "FAIL"
 
-    # 금액 검증 (위변조 방지)
+    # 금액 검증 (위변조 방지) — payapp은 모든 웹훅에 price를 항상 포함
     webhook_price_str = form_data.get("price", "")
-    if webhook_price_str:
-        try:
-            if int(webhook_price_str) != db_plan.price:
-                logger.warning(
-                    "웹훅 금액 불일치: expected=%d received=%s rebill_no=%s",
-                    db_plan.price, webhook_price_str, rebill_no,
-                )
-                return "FAIL"
-        except ValueError:
-            logger.warning("웹훅 price 파싱 불가: %s rebill_no=%s", webhook_price_str, rebill_no)
+    if not webhook_price_str:
+        logger.warning("웹훅 price 필드 누락: rebill_no=%s", rebill_no)
+        return "FAIL"
+    try:
+        if int(webhook_price_str) != db_plan.price:
+            logger.warning(
+                "웹훅 금액 불일치: expected=%d received=%s rebill_no=%s",
+                db_plan.price, webhook_price_str, rebill_no,
+            )
             return "FAIL"
+    except ValueError:
+        logger.warning("웹훅 price 파싱 불가: %s rebill_no=%s", webhook_price_str, rebill_no)
+        return "FAIL"
 
     sub_type_str, plan_str = plan_key_str.split(":")
     now = datetime.now(timezone.utc)

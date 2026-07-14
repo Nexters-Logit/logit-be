@@ -1,6 +1,7 @@
 """결제 라우터."""
 
 import logging
+import secrets
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
@@ -93,7 +94,7 @@ async def admin_deactivate_subscription(
     어드민 전용 — PayApp 취소 + 구독 즉시 비활성화.
     X-Admin-Secret 헤더 필수.
     """
-    if not settings.ADMIN_SECRET or x_admin_secret != settings.ADMIN_SECRET:
+    if not settings.ADMIN_SECRET or not secrets.compare_digest(x_admin_secret or "", settings.ADMIN_SECRET):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
 
     try:
@@ -116,7 +117,7 @@ async def admin_refund_payment(
     구독 기간은 유지된다 (남은 기간 사용 가능).
     X-Admin-Secret 헤더 필수.
     """
-    if not settings.ADMIN_SECRET or x_admin_secret != settings.ADMIN_SECRET:
+    if not settings.ADMIN_SECRET or not secrets.compare_digest(x_admin_secret or "", settings.ADMIN_SECRET):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
 
     try:

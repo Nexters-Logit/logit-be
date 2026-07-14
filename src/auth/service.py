@@ -337,9 +337,7 @@ async def _verify_apple_id_token(
 
     kid = unverified_header.get("kid")
     signing_key = await _find_jwks_key(kid, _get_apple_jwks, "Apple")
-    allowed_audiences = [settings.APPLE_CLIENT_ID]
-    if settings.APPLE_CLIENT_ID:
-        allowed_audiences.append(settings.APPLE_CLIENT_ID[:-3])  # bundle id (앱용)
+    allowed_audiences = [aud for aud in [settings.APPLE_CLIENT_ID, settings.APPLE_BUNDLE_ID] if aud]
 
     try:
         decoded = jwt.decode(

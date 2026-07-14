@@ -5,7 +5,7 @@ import secrets
 from urllib.parse import urlencode
 from uuid import UUID
 
-from fastapi import APIRouter, Cookie, Form, Header, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Form, Header, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from src.auth import constants, schemas, service
@@ -164,10 +164,8 @@ async def google_callback(code: str, state: str, session: SessionDep):
     try:
         await _verify_oauth_state(state)
         result = await service.google_oauth_flow(code=code, session=session)
-    except HTTPException as e:
-        return _error_redirect(e.detail)
     except Exception:
-        return _error_redirect("Google 로그인 처리 중 오류가 발생했습니다.")
+        return _error_redirect("oauth_failed")
 
     return await _store_temp_code_and_redirect(result)
 
@@ -267,10 +265,8 @@ async def apple_callback(
         result = await service.apple_oauth_flow(
             code=code, user_json=user, session=session, nonce=nonce
         )
-    except HTTPException as e:
-        return _error_redirect(e.detail)
     except Exception:
-        return _error_redirect("Apple 로그인 처리 중 오류가 발생했습니다.")
+        return _error_redirect("oauth_failed")
 
     return await _store_temp_code_and_redirect(result)
 
