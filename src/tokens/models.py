@@ -34,6 +34,7 @@ class UserToken(SQLModel, table=True):
         sa_column=Column(DateTime(timezone=True), nullable=True),
     )
     signup_bonus_granted: bool = Field(default=False)
+    unnotified_signup_bonus_amount: int = Field(default=0)
     unnotified_referral_amount: int = Field(default=0)
     unnotified_referral_count: int = Field(default=0)
     updated_at: datetime = Field(
