@@ -144,14 +144,6 @@ async def _find_or_create_user(
                 profile_image_url=picture,
             ),
         )
-        # 회원가입 보너스는 계정 생성 시점에 지급한다 (커밋은 _generate_tokens_for_user에서
-        # JWT 발급과 함께 한 번에 처리 — 여기서 커밋하면 new_user의 속성이 만료되어
-        # 이후 접근 시 비동기 세션에서 암묵적 lazy-load 에러가 난다).
-        # FE는 GET /tokens/balance로 지급 여부를 조회한다.
-        from src.tokens.service import grant_signup_bonus
-
-        await grant_signup_bonus(session, new_user.id)
-        return new_user, True
     except IntegrityError:
         await session.rollback()
         # 동시 요청으로 이미 생성된 사용자를 재조회
@@ -161,6 +153,18 @@ async def _find_or_create_user(
         if existing:
             return existing, False
         raise OAuthError("Account creation conflict. Please try again.") from None
+
+    # 회원가입 보너스는 계정 생성 시점에 지급한다 (커밋은 _generate_tokens_for_user에서
+    # JWT 발급과 함께 한 번에 처리 — 여기서 커밋하면 new_user의 속성이 만료되어
+    # 이후 접근 시 비동기 세션에서 암묵적 lazy-load 에러가 난다).
+    # try/except IntegrityError 범위 밖에 둬서, 이 지급 자체가 IntegrityError를 던져도
+    # "동시 생성 충돌"로 오인해 보너스를 유실한 채 기존 유저로 오응답하지 않도록 한다.
+    # 혹시 이 지급이 세션 커밋 전에 실패하더라도, GET /tokens/balance가 같은
+    # grant_signup_bonus를 멱등하게 재시도하므로 보너스가 영구히 유실되지 않는다.
+    from src.tokens.service import grant_signup_bonus
+
+    await grant_signup_bonus(session, new_user.id)
+    return new_user, True
 
 
 async def _generate_tokens_for_user(

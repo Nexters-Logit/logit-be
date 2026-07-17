@@ -16,6 +16,7 @@ from .service import (
     claim_referral_notification,
     claim_signup_bonus_notification,
     ensure_monthly_tokens,
+    grant_signup_bonus,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,9 @@ async def get_token_balance(
     - 월간 지급: 이번 결제 주기 토큰이 미지급이면 자동 지급 (시간창 기반, 트리거 이벤트 없음)
     - 출석: 오늘 첫 조회면 자동 체크인 (시간창 기반, 트리거 이벤트 없음)
     - 가입 보너스 / 친구 초대 보상: 계정 생성·초대 성공 시점에 이미 지급된 건을
-      최초 1회만 알려준다 (claim-and-clear).
+      최초 1회만 알려준다 (claim-and-clear). 가입 시점 지급이 어떤 이유로든
+      누락된 경우를 대비해, 여기서도 멱등하게 재시도한다 (grant_signup_bonus는
+      이미 지급됐으면 아무 것도 하지 않는다).
     """
     subscription = await get_active_subscription(session, current_user.id, SubscriptionType.LOGIT)
 
@@ -48,6 +51,7 @@ async def get_token_balance(
     except Exception:
         logger.exception("Attendance auto check-in failed: user=%s", current_user.id)
 
+    await grant_signup_bonus(session, current_user.id)
     signup_bonus_amount = await claim_signup_bonus_notification(session, current_user.id)
     referral_amount, referral_count = await claim_referral_notification(session, current_user.id)
 

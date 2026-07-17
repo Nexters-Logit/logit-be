@@ -1,6 +1,7 @@
 """인증 API 엔드포인트"""
 
 import json
+import logging
 import secrets
 from urllib.parse import urlencode
 from uuid import UUID
@@ -9,7 +10,11 @@ from fastapi import APIRouter, Cookie, Form, Header, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from src.auth import constants, schemas, service
-from src.auth.exceptions import OAuthError, OAuthProviderNotConfiguredError
+from src.auth.exceptions import (
+    InvalidTokenError,
+    OAuthError,
+    OAuthProviderNotConfiguredError,
+)
 from src.auth.utils import get_frontend_callback_url, get_oauth_redirect_uri
 from src.common.responses import (
     ERROR_400_BAD_REQUEST,
@@ -24,6 +29,8 @@ from src.exceptions import AuthenticationError, InactiveUserError, UserNotFoundE
 from src.security import create_access_token, create_refresh_token, verify_token
 from src.users import service as user_service
 from src.users.dependencies import SessionDep
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -165,6 +172,7 @@ async def google_callback(code: str, state: str, session: SessionDep):
         await _verify_oauth_state(state)
         result = await service.google_oauth_flow(code=code, session=session)
     except Exception:
+        logger.exception("Google OAuth callback failed")
         return _error_redirect("oauth_failed")
 
     return await _store_temp_code_and_redirect(result)
@@ -195,9 +203,13 @@ async def google_mobile_login(
     if not settings.GOOGLE_CLIENT_ID:
         raise OAuthProviderNotConfiguredError("Google")
 
-    result = await service.google_mobile_auth_flow(
-        id_token=request.id_token, session=session
-    )
+    try:
+        result = await service.google_mobile_auth_flow(
+            id_token=request.id_token, session=session
+        )
+    except InvalidTokenError:
+        logger.exception("Google mobile login failed: invalid id_token")
+        raise InvalidTokenError() from None
 
     return schemas.MobileTokenResponse(**result)
 
@@ -266,6 +278,7 @@ async def apple_callback(
             code=code, user_json=user, session=session, nonce=nonce
         )
     except Exception:
+        logger.exception("Apple OAuth callback failed")
         return _error_redirect("oauth_failed")
 
     return await _store_temp_code_and_redirect(result)
@@ -297,11 +310,15 @@ async def apple_mobile_login(
     if not settings.APPLE_CLIENT_ID:
         raise OAuthProviderNotConfiguredError("Apple")
 
-    result = await service.apple_mobile_auth_flow(
-        id_token=request.id_token,
-        full_name=request.full_name,
-        session=session,
-    )
+    try:
+        result = await service.apple_mobile_auth_flow(
+            id_token=request.id_token,
+            full_name=request.full_name,
+            session=session,
+        )
+    except InvalidTokenError:
+        logger.exception("Apple mobile login failed: invalid id_token")
+        raise InvalidTokenError() from None
 
     return schemas.MobileTokenResponse(**result)
 
