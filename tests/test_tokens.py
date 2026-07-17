@@ -50,10 +50,23 @@ def test_get_balance_no_record(client: TestClient, session: Session) -> None:
     data = resp.json()
     assert data["plan"] == "free"
     assert data["monthly_tokens"] == PLAN_MONTHLY_TOKENS["free"]
-    # 첫 조회 시 월 토큰 + 당일 출석 토큰이 함께 자동 지급된다
+    # 첫 조회 시 월 토큰 + 당일 출석 토큰 + (가입 시점에 못 받았던) 가입 보너스가
+    # 안전망(grant_signup_bonus 멱등 재시도)을 통해 함께 자동 지급된다.
+    # make_user()는 OAuth 가입 플로우를 거치지 않으므로 signup_bonus_granted가
+    # False인 상태 — 이 조회에서 안전망이 지급해준다.
     assert data["monthly_grant_received"] is True
     assert data["attendance_received"] is True
-    assert data["balance"] == PLAN_MONTHLY_TOKENS["free"] + data["attendance_amount"]
+    assert data["signup_bonus_received"] is True
+    assert data["signup_bonus_amount"] == SIGNUP_BONUS_TOKENS
+    assert data["balance"] == (
+        PLAN_MONTHLY_TOKENS["free"] + data["attendance_amount"] + SIGNUP_BONUS_TOKENS
+    )
+
+    # 두 번째 조회에서는 안전망도 재지급하지 않는다 (멱등)
+    second = client.get("/api/v1/tokens/balance", headers=auth_header(token)).json()
+    assert second["signup_bonus_received"] is False
+    assert second["signup_bonus_amount"] == 0
+    assert second["balance"] == data["balance"]
 
 
 def test_get_balance_monthly_grant_not_doubled(client: TestClient, session: Session) -> None:
