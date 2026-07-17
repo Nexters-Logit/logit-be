@@ -28,6 +28,24 @@ def test_apple_oauth_redirect(client: TestClient) -> None:
     assert "appleid.apple.com" in response.headers["location"]
 
 
+def test_apple_callback_error_redirect_uses_303(client: TestClient) -> None:
+    """
+    Apple은 response_mode=form_post라 콜백을 POST로 호출한다. 프론트로
+    되돌려보내는 리디렉션이 307(원래 메서드 유지)이면 브라우저가 GET만
+    받는 프론트 /auth/callback 페이지에 POST로 재요청해 405가 발생한다.
+    303 See Other를 써서 브라우저가 항상 GET으로 전환하도록 해야 한다.
+    """
+    # state가 유효하지 않으므로 Apple API를 호출하지 않고 바로 에러 리디렉션됨
+    response = client.post(
+        "/api/v1/auth/apple/callback",
+        data={"code": "irrelevant", "state": "invalid_or_expired_state"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert "error=oauth_failed" in response.headers["location"]
+
+
 @patch("src.auth.router._verify_oauth_state", return_value=None)
 @patch("src.auth.service.httpx.AsyncClient.post")
 @patch("src.auth.service.httpx.AsyncClient.get")
@@ -62,8 +80,11 @@ async def test_google_callback_new_user(
         follow_redirects=False,
     )
 
-    # Should redirect to frontend with a temp code (not an error)
-    assert response.status_code == 307
+    # Should redirect to frontend with a temp code (not an error).
+    # 303 See Other — POST로 호출되는 Apple 콜백에서도 브라우저가 리디렉션 시
+    # GET으로 전환하도록 한다 (307은 원래 메서드를 유지해 Apple form_post
+    # 콜백에서 프론트 페이지가 405를 반환하는 문제가 있었음).
+    assert response.status_code == 303
     location = response.headers["location"]
     assert "error" not in location
     assert "code=" in location
@@ -122,7 +143,7 @@ async def test_google_callback_existing_user(
         follow_redirects=False,
     )
 
-    assert response.status_code == 307
+    assert response.status_code == 303
     location = response.headers["location"]
     assert "error" not in location
     assert "code=" in location

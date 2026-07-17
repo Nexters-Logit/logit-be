@@ -95,7 +95,14 @@ async def _verify_oauth_state(state: str) -> str | None:
 
 
 async def _store_temp_code_and_redirect(result: dict) -> RedirectResponse:
-    """OAuth 결과를 Redis 임시 코드로 저장하고 프론트엔드로 리디렉션."""
+    """OAuth 결과를 Redis 임시 코드로 저장하고 프론트엔드로 리디렉션.
+
+    status_code=303(See Other)을 명시한다 — Apple 콜백(apple_callback)은
+    response_mode=form_post라 POST로 호출되는데, 기본값인 307은 리디렉션
+    시에도 원래 메서드(POST)를 그대로 유지시켜 GET만 받는 프론트엔드
+    /auth/callback 페이지가 405를 반환하게 된다. 303은 항상 GET으로
+    리디렉션하므로 POST/GET 어느 콜백에서 호출돼도 안전하다.
+    """
     temp_code = secrets.token_urlsafe(32)
     redis = await get_redis()
     await redis.set(
@@ -106,15 +113,17 @@ async def _store_temp_code_and_redirect(result: dict) -> RedirectResponse:
 
     params = urlencode({"code": temp_code})
     return RedirectResponse(
-        url=f"{get_frontend_callback_url()}?{params}"
+        url=f"{get_frontend_callback_url()}?{params}",
+        status_code=status.HTTP_303_SEE_OTHER,
     )
 
 
 def _error_redirect(detail: str) -> RedirectResponse:
-    """에러 메시지와 함께 프론트엔드로 리디렉션."""
+    """에러 메시지와 함께 프론트엔드로 리디렉션 (POST 콜백에서도 안전하도록 303 사용)."""
     error_params = urlencode({"error": detail})
     return RedirectResponse(
-        url=f"{get_frontend_callback_url()}?{error_params}"
+        url=f"{get_frontend_callback_url()}?{error_params}",
+        status_code=status.HTTP_303_SEE_OTHER,
     )
 
 
