@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import Session
 
 from src.security import create_access_token
@@ -145,6 +146,46 @@ def test_apply_referral_duplicate_rejected(client: TestClient, session: Session)
 
     resp = client.post("/api/v1/users/referral/apply", headers=auth_header(invitee_token), json={"code": code})
     assert resp.status_code == 409
+
+
+async def test_apply_referral_concurrent_requests_only_credit_once(
+    session: Session, async_session: AsyncSession,
+) -> None:
+    """
+    동시 요청(더블 탭/네트워크 재시도)으로 두 요청이 모두
+    invitee.referred_by_user_id=None인 상태를 읽더라도, 원자적
+    UPDATE...WHERE claim 덕분에 한쪽만 성공하고 토큰도 1회만 지급돼야 한다.
+    두 개의 독립된 AsyncSession으로 "동시에 들어온 두 요청"을 시뮬레이션한다.
+    """
+    from src.users.referral import apply_referral_code, get_or_create_referral_code
+    from tests.conftest import _async_engine
+
+    inviter, _ = make_user(session, "race_inviter@example.com")
+    invitee, _ = make_user(session, "race_invitee@example.com")
+
+    inviter_async = await async_session.get(User, inviter.id)
+    code = await get_or_create_referral_code(async_session, inviter_async)
+    await async_session.commit()
+
+    async with AsyncSession(_async_engine) as session_a, AsyncSession(_async_engine) as session_b:
+        invitee_a = await session_a.get(User, invitee.id)
+        invitee_b = await session_b.get(User, invitee.id)
+        # 두 세션 모두 아직 초대받지 않은 상태를 읽었다 (레이스 재현)
+        assert invitee_a.referred_by_user_id is None
+        assert invitee_b.referred_by_user_id is None
+
+        result_a = await apply_referral_code(session_a, invitee_a, code)
+        await session_a.commit()
+
+        result_b = await apply_referral_code(session_b, invitee_b, code)
+        await session_b.commit()
+
+    assert result_a["success"] is True
+    assert result_b == {"success": False, "reason": "already_referred"}
+
+    inviter_balance = await async_session.get(UserToken, inviter.id)
+    await async_session.refresh(inviter_balance)
+    assert inviter_balance.balance == REFERRAL_TOKENS
 
 
 def test_apply_invalid_code(client: TestClient, session: Session) -> None:

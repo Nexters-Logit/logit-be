@@ -6,7 +6,7 @@ import logging
 import secrets
 import string
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.tokens.constants import REFERRAL_TOKENS
@@ -68,8 +68,19 @@ async def apply_referral_code(
         return {"success": False, "reason": "self_referral"}
 
     try:
-        invitee_user.referred_by_user_id = str(inviter.id)
-        session.add(invitee_user)
+        # 위의 in-memory 체크만으로는 동시 요청(더블 탭/재시도)이 둘 다 통과해
+        # 토큰이 이중 지급될 수 있다. "아직 초대받지 않은 경우에만" 원자적으로
+        # claim하고, 영향받은 row 수로 실제 승인 여부를 판단한다 — 두 요청이
+        # 동시에 들어와도 하나만 rowcount=1을 받는다.
+        claim_result = await session.execute(
+            update(User)
+            .where(User.id == invitee_user.id, User.referred_by_user_id.is_(None))
+            .values(referred_by_user_id=str(inviter.id))
+        )
+        if claim_result.rowcount == 0:
+            # 동시 요청 중 하나가 이미 선점함 — rollback은 라우터가 일괄 처리한다
+            # (invalid_code/self_referral과 동일하게).
+            return {"success": False, "reason": "already_referred"}
 
         await credit_referral_inviter(session, inviter.id, REFERRAL_TOKENS)
         await credit(

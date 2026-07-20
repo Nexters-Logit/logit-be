@@ -65,6 +65,13 @@ def reset_async_singletons() -> Generator[None, None, None]:
     _db._qdrant_client = None
 
 
+@pytest.fixture(name="async_session")
+async def async_session_fixture() -> AsyncGenerator[AsyncSession, None]:
+    """서비스 함수를 HTTP 레이어 없이 직접 호출할 때 쓰는 AsyncSession (동시성 테스트용)."""
+    async with AsyncSession(_async_engine) as async_session:
+        yield async_session
+
+
 @pytest.fixture(name="client")
 def client_fixture(session: Session) -> Generator[TestClient, None, None]:
     async def get_async_db_override() -> AsyncGenerator[AsyncSession, None]:
