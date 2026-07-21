@@ -1,6 +1,6 @@
 include:
   - path: docker-compose.infra.yml
-    env_file: .env.prod
+    env_file: .env
 
 services:
   caddy:
@@ -27,7 +27,7 @@ services:
     expose:
       - "8000"
     env_file:
-      - .env.prod
+      - .env
     environment:
       - ENVIRONMENT=production
       - POSTGRES_SERVER=postgres
@@ -61,7 +61,7 @@ services:
     expose:
       - "8000"
     env_file:
-      - .env.prod
+      - .env
     environment:
       - ENVIRONMENT=production
       - POSTGRES_SERVER=postgres
