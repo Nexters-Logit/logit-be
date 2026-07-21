@@ -147,8 +147,8 @@ class Settings(BaseSettings):
     # Sentry
     SENTRY_DSN: str | None = None
 
-    # Slack Error Notification
-    SLACK_WEBHOOK_URL: str | None = None
+    # Discord Error Notification
+    DISCORD_WEBHOOK_URL: str | None = None
 
     @model_validator(mode="after")
     def _enforce_non_default_secrets(self) -> Self:

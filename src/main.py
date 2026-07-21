@@ -4,6 +4,7 @@ FastAPI application with domain-driven structure.
 Inspired by fastapi-best-practices and Netflix Dispatch.
 """
 
+import asyncio
 import logging
 import secrets
 import time
@@ -20,7 +21,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from src.auth import router as auth_router
 from src.banners import router as banners_router
 from src.chats import router as chats_router
-from src.common.slack import send_error_notification
+from src.common.discord import send_error_notification
 from src.config import settings
 from src.database import init_qdrant_collection
 from src.experience import router as experience_router
@@ -76,8 +77,8 @@ async def lifespan(app: FastAPI):
     Runs once on startup and cleanup on shutdown.
     """
     logger.info("🚀 Starting up Logit-server...")
-    # Startup: Initialize Qdrant collection
-    init_qdrant_collection()
+    # Startup: Initialize Qdrant collection (동기 클라이언트라 이벤트 루프 블로킹 방지 위해 스레드로)
+    await asyncio.to_thread(init_qdrant_collection)
     yield
     # Shutdown: cleanup if needed
     logger.info("👋 Shutting down Logit-server...")
@@ -148,7 +149,7 @@ async def logging_middleware(request: Request, call_next):
             f'"{request.method} {request.url.path}" 500 {process_time:.2f}ms - Error: {e}',
             exc_info=True
         )
-        send_error_notification(request, e)
+        await send_error_notification(request, e)
         raise
 
 if docs_auth_required:
